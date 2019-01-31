@@ -3,6 +3,7 @@
 ## TODO
 * Establish data pipeline.
 * Establish a baseline.
+* Build jupyter notebook.
 
 ## Data sources
-[Fair Child](http://rit-mcsl.org/fairchild/HDR.html "Fair Child data")
+[Fairchild](http://rit-mcsl.org/fairchild/HDR.html "Fairchild data")
