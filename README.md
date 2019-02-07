@@ -8,7 +8,7 @@
 #### Data sources
 [Fairchild](http://rit-mcsl.org/fairchild/HDR.html "Fairchild data")
 
-## HDR Example
+#### HDR Example
 https://www.sony-semicon.co.jp/products_en/IS/sensor2/technology/dol-hdr.html
 
 #### Misc
