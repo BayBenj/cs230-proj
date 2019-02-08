@@ -5,6 +5,7 @@ PROJ?=src/
 MAX_COMPLEXITY?=5
 
 
+.PHONY : install
 .PHONY : virtualenv
 .PHONY : update
 .PHONY : pull
@@ -14,6 +15,10 @@ MAX_COMPLEXITY?=5
 .PHONY : check-style
 .PHONY : check-camel-case
 .PHONY : checks
+
+
+install: virtualenv
+    pip install -r requirements.txt
 
 
 virtualenv:

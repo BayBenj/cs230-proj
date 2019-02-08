@@ -3,6 +3,7 @@ import os
 from tqdm import trange, tqdm
 from skimage import io, transform
 import requests
+import OpenEXR
 
 fairchild_data = "http://rit-mcsl.org/fairchild/files/HDRPS_Raws.zip"
 
@@ -27,5 +28,9 @@ def load_data(size=5):
     return result
 
 
-fairchild_zip = download_file(fairchild_data)
+def load_exr(filename):
+    loaded_exr = OpenEXR.InputFile(filename)
+    print(loaded_exr)
 
+#fairchild_zip = download_file(fairchild_data)
+load_exr("../data/PeckLake.exr")

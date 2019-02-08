@@ -1,4 +1,6 @@
-OpenEXR
+openexr
+tqdm
+skimage
 
 autopep8
 pylint
