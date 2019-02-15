@@ -19,7 +19,7 @@ https://www.sony-semicon.co.jp/products_en/IS/sensor2/technology/dol-hdr.html
 #### Misc
 Abhijeet Shenoi's Zoom ID: 815 834 5827
 
-####Important dates
+#### Important dates
 * Feb 13: Midterm
 * Feb 19: Project milestone due (writeup and code)
 * Mar 19: Project poster and report due
