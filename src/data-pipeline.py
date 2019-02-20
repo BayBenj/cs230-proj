@@ -18,8 +18,8 @@ def download_file(url):
     return local_filename
 
 
-def load_data(size=5):
-    files_in = os.listdir(DIRECTORY)
+def load_data(data_dir=".", size=5):
+    files_in = os.listdir(data_dir)
     files = np.random.choice(files_in, size=size)
     images = []
     for f in tqdm(files):
