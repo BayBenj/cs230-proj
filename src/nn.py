@@ -3,9 +3,12 @@ import tensorlayer as tl
 import tensorflow as tf
 
 
+SAME = "SAME"
+
+
 def conv(input_layer, size, name):
     nn = tl.layers.Conv2dLayer(input_layer,
-            padding="SAME",
+            padding=SAME,
             act=tf.nn.relu,
             shape=[3, 3, size[0], size[1]],
             strides=[1, 1, 1, 1],
@@ -15,7 +18,7 @@ def conv(input_layer, size, name):
 
 def deconv(input_layer, size, name):
     nn = tl.layers.DeConv2dLayer(input_layer,
-            padding="SAME",
+            padding=SAME,
             act=tf.nn.relu,
             shape=[3, 3, size[0], size[1]],
             strides=[1, 1, 1, 1],
@@ -26,7 +29,7 @@ def deconv(input_layer, size, name):
 
 def max_pool(input_layer, name):
     nn = tl.layers.PoolLayer(input_layer,
-            padding="SAME",
+            padding=SAME,
             pool=tf.nn.max_pool,
             ksize=[1, 2, 2, 1],
             strides=[1, 2, 2, 1],
