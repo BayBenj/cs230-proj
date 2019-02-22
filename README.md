@@ -5,7 +5,23 @@
 * Improve IQ for automatic tone-mapping algorithm via tuning for baseline
 * Build jupyter notebook.
 
-#### Pipeline
+#### Data
+Unprocessed raw images (Fairchild HDR dataset):
+```
+data/hdr_image_dataset
+```
+
+8-bit RGB images (all exposures + baseline render):
+```
+data/proc_image_dataset
+```
+
+Locally tone-mapped HDR renders (ground truth):
+```
+data/hdr_image_dataset_renders
+```
+
+#### Data pipeline
 * Raw data, including HDR images.
 * Python script that reads in data.
 * Python script that manipulates data according to our specifications.
