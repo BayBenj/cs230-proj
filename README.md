@@ -28,7 +28,7 @@ data/hdr_image_dataset_renders/
 
 
 ## Model script
-The file `src/model.py` contains the begginings of our outlined architecture. When complete, it will be the driver of our entire workflow.
+The file `src/model.py` contains the beginnings of our outlined architecture. When complete, it will be the driver of our entire workflow.
 
 Note that as of Feb 21, this code does not yet properly run.
 
