@@ -25,7 +25,10 @@ data/hdr_image_dataset_renders/
 
 
 ## Baseline
-
+To calculate PSNR metric on baseline images vs. the ground truth images:
+```
+./src/data-preprocess.py ../data/hdr_image_dataset ../data/proc_image_dataset/
+```
 
 ## Model script
 The file `src/model.py` contains the beginnings of our outlined architecture. When complete, it will be the driver of our entire workflow.
