@@ -27,7 +27,11 @@ data/hdr_image_dataset_renders/
 ## Baseline
 To calculate PSNR metric on baseline images vs. the ground truth images:
 ```
-./src/data-preprocess.py ../data/hdr_image_dataset ../data/proc_image_dataset/
+./src/baseline_metric.py <ground_truth_dir> <output_dir>
+```
+We have output PSNR values for baseline for some of the sample scenes here:
+```
+./src/psnr_scenes.txt
 ```
 
 ## Model script
