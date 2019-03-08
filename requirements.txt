@@ -1,7 +1,5 @@
 openexr
 tqdm
-skimage
+scikit-image
+keras
 
-autopep8
-pylint
-flake8

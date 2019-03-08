@@ -1,5 +1,18 @@
 # cs230-proj
 
+## Setup
+First, build the virtual environment and install all dependencies with:
+```
+make install
+```
+
+Next, activate the virtual environment with:
+```
+source cs230_venv/bin/activate
+```
+
+You are ready to run the model.
+
 ## Preprocessing
 To run preprocessing on HDR dataset raws, generate baseline tone-mapped images:
 ```
