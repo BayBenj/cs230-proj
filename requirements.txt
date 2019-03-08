@@ -2,4 +2,5 @@ openexr
 tqdm
 scikit-image
 keras
+OpenEXR
 

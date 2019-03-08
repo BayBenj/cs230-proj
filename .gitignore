@@ -1,3 +1,6 @@
 .DS_STORE
 vgg16.npy
+venv_cs230
+*.py[cod]
+__pycache__/
 
