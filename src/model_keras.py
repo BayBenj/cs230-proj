@@ -4,43 +4,53 @@ import argparse
 import os
 
 import numpy as np
-import tensorflow as tf
+import pprint as pp
 
+import tensorflow as tf
+from keras.preprocessing import image
 from keras.models import Model
 from keras.layers import Input, Dense, Conv2D, Conv2DTranspose
-# from keras.optimizers import
 from keras.applications import VGG16
 import keras.backend as K
 
-kernel_size = (4, 4)
 
 def main():
     global args
 
     args = parse_args()
 
-    train_set, dev_set = load_datasets()
+    x, y = load_datasets()
 
-    train_model(train_set, dev_set)
+    train_model((x, y))
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Script to train HDR inference model')
     parser.add_argument('--input-dir', dest='input_dir', type=str,
-        default='.//',
+        default='/proj/data/proc_nn_dataset',
         help='Base path to training input images dataset')
     parser.add_argument('--output-fn', dest='output_fn', type=str,
         default='hdr-infer-model.h5',
         help='Output model filename')
+    parser.add_argument('--max-samples', dest='max_samples', type=int,
+        default=None)
+    parser.add_argument('--epochs', dest='num_epochs', type=int,
+        default=100)
+    parser.add_argument('--batch_size', dest='batch_size', type=int,
+        default=32)
 
     return parser.parse_args()
 
-
-def train_model(train_set, dev_set):
+def train_model(dataset):
     model = assemble_model()
 
-    # model.fit(...)
+    X, Y = dataset
+
+    model.summary()
+
+    model.fit(X, Y, epochs=args.num_epochs, batch_size=args.batch_size,
+        verbose=2, validation_split=0.2, shuffle=True)
 
 
 def encoder():
@@ -67,15 +77,43 @@ def assemble_model():
 
     model = Model(inputs=vgg16.input, outputs=x)
 
-    model.summary()
-
-    return model.compile(optimizer='adam', loss='binary_crossentropy',
+    model.compile(optimizer='adam', loss='binary_crossentropy',
         metrics=['accuracy'])
 
+    return model
 
 def load_datasets():
-    return [], []
+    x_fd = os.path.join(args.input_dir, 'x')
+    y_fd = os.path.join(args.input_dir, 'y')
+    
+    x = []
+    y = []
+    for i, imgx_fn in enumerate(os.listdir(x_fd)):
+        if (args.max_samples is not None) and (i+1 > args.max_samples):
+            break
+        imgx_fp = os.path.join(x_fd, imgx_fn)
+        imgy_fn = 'y' + imgx_fn[1:]
+        imgy_fp = os.path.join(y_fd, imgy_fn)
+        if os.path.isfile(imgx_fp):
+            assert(os.path.isfile(imgy_fp))
+            x.append(image.img_to_array(image.load_img(imgx_fp)))
+            y.append(image.img_to_array(image.load_img(imgy_fp)))
+    
+    x = np.asarray(x)
+    y = np.asarray(y)
+
+    # Normalize input images
+    # VGG16.preprocess_inputs()
+    
+    # Shuffle training pairs
+    idx = list(range(x.shape[0]))
+    np.random.shuffle(idx)
+    x = x[idx]
+    y = y[idx]
+
+    return x, y
 
 
 if __name__ == '__main__':
     main()
+
