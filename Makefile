@@ -23,6 +23,7 @@ install: virtualenv
 
 
 virtualenv:
+	pip install virtualenv
 	python -m virtualenv $(VENV) --system-site-packages
 
 

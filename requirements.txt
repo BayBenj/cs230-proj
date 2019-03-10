@@ -1,6 +1,12 @@
 openexr
 tqdm
 scikit-image
-keras
 OpenEXR
+numpy
+rawpy
+imageio
+matplotlib
+requests
 
+keras
+tensorflow
