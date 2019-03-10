@@ -41,6 +41,8 @@ def parse_args():
         default=100)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
+    parser.add_argument('--no-rand-seed', dest='rnd_seed',
+        action='store_false', default=True)
 
     return parser.parse_args()
 
@@ -103,6 +105,10 @@ def load_datasets():
     
     # Shuffle training pairs
     idx = list(range(x.shape[0]))
+
+    if args.rnd_seed:
+        np.random.seed(3141516)
+
     np.random.shuffle(idx)
     x = x[idx]
     y = y[idx]
