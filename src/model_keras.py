@@ -14,8 +14,6 @@ import keras.backend as K
 
 kernel_size = (4, 4)
 
-SAME = "same"
-
 def main():
     global args
 
@@ -24,6 +22,7 @@ def main():
     train_set, dev_set = load_datasets()
 
     train_model(train_set, dev_set)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -37,37 +36,46 @@ def parse_args():
 
     return parser.parse_args()
 
+
 def train_model(train_set, dev_set):
     model = assemble_model()
 
     # model.fit(...)
 
 
-def assemble_model():
-    # Encoder (VGG16)
+def encoder():
     vgg16_input = VGG16(include_top=False, weights='imagenet',
         input_shape=(224, 224, 3))
     for layer in vgg16_input.layers[:17]:
         layer.trainable = False
+    return vgg16_input
 
-    x = vgg16_input.layers[-2].output
 
-    # Decoder
-    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding=SAME)(x)
-    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding=SAME)(x)
-    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding=SAME)(x)
-    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding=SAME)(x)
-    x = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding=SAME)(x)
+def decoder(x):
+    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2D(3, (1, 1), activation='sigmoid', padding="same")(x)
+    return x
 
-    model = Model(inputs=vgg16_input.input, outputs=x)
+
+def assemble_model():
+    vgg16 = encoder()
+    x = vgg16.layers[-2].output
+    x = decoder(x)
+
+    model = Model(inputs=vgg16.input, outputs=x)
 
     model.summary()
 
     return model.compile(optimizer='adam', loss='binary_crossentropy',
         metrics=['accuracy'])
 
+
 def load_datasets():
     return [], []
+
 
 if __name__ == '__main__':
     main()
