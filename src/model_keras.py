@@ -16,11 +16,8 @@ import keras.backend as K
 
 def main():
     global args
-
     args = parse_args()
-
     x, y = load_datasets()
-
     train_model((x, y))
 
 
@@ -36,7 +33,7 @@ def parse_args():
     parser.add_argument('--max-samples', dest='max_samples', type=int,
         default=None)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
-        default=100)
+        default=10)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
 
@@ -77,8 +74,7 @@ def assemble_model():
 
     model = Model(inputs=vgg16.input, outputs=x)
 
-    model.compile(optimizer='adam', loss='binary_crossentropy',
-        metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='mean_squared_error')
 
     return model
 
