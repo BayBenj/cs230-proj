@@ -3,8 +3,11 @@
 import argparse
 import os
 import re
+import math
 
 import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
 import cv2
 import rawpy
 import imageio
@@ -12,39 +15,72 @@ import pyexiv2
 
 import pprint as pp
 
-ldr_input_fns = []
-ldr_input_ets = []
-
 def main():
     global args
 
     args = parse_args()
 
-    # Convert all raw images to 8-bit RGB, generate an HDR image from multiple
-    # exposures per scene
-    proc_raw_images()
-    # Resize all output images to NN spec.
-    resize_proc_images()
+    # Convert all raw images to 8-bit RGB
+    snslugs_rgb = conv_raw_images()
 
-    # Generate text file w/ <LDR, HDR> pairs
-    write_test_pairs()
+    # Map RGB exposures w/ scene HDR render
+    rend_rgb = link_test_pairs(snslugs_rgb)
+
+    # Debugging, leave commented!
+    # rend_rgb = {
+    #     'data/fchdr_rend_dataset/507Rendered.jpg': [
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0001.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0002.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0003.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0004.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0005.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0006.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0007.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0008.png',
+    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0009.png']
+    #     'data/fchdr_rend_dataset/GeneralShermanRendered.jpg': [
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0065.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0066.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0067.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0068.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0069.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0070.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0071.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0072.png",
+    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0073.png"]
+    # }
+
+    # Generate <LDR, HDR> samples dataset for NN
+    gen_nn_dataset(rend_rgb)
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Preprocess HDR images for data pipeline to neural network')
-    parser.add_argument('input_dir', type=str,
-        default='../data/hdr_image_dataset')
-    parser.add_argument('output_dir', type=str,
-        default='../data/proc_image_dataset')
+    parser.add_argument('--input-raw-dir', dest='input_raw_dir', type=str,
+        default='data/fchdr_raw_dataset')
+    parser.add_argument('--input-rend-dir', dest='input_rend_dir', type=str,
+        default='data/fchdr_rend_dataset')
+    parser.add_argument('--output-rgb-dir', dest='output_rgb_dir', type=str,
+        default='data/fchdr_rgb_dataset')
+    parser.add_argument('--output-nn-dir', dest='output_nn_dir', type=str,
+        default='data/proc_nn_dataset')
     parser.add_argument('--output-size', dest='output_size', type=str,
-        default='300x300')
-    parser.add_argument('--tone-map-algo', dest='tone_map_algo', type=str,
-        choices=['reinhard', 'durand'], default='reinhard')
+        default='224x224',
+        help='Output image dimensions')
+    parser.add_argument('--output-format', dest='output_fm', type=str,
+        choices=['png', 'jpeg'], default='png',
+        help='Output image RGB format')
     parser.add_argument('--force', dest='force', action='store_true',
         default=False,
         help='Force overwrite existing output files')
 
     return parser.parse_args()
+
+def parse_dims(dims):
+    match = re.match(r'^(\d+)[Xx](\d+)$', dims)
+    if not match:
+        raise ValueError('parse_dims: invalid dimensions format' + dims)
+    return int(match.group(1)), int(match.group(2))
 
 def name_slugify(name):
     name = name.lower()
@@ -54,79 +90,234 @@ def name_slugify(name):
         name = name[0:-1]
     return name
 
-def proc_raw_images():
-    for ds_root, scenes, _ in os.walk(args.input_dir):
+def conv_raw_images():
+    files_processed = False
+
+    snslugs_rgb = []
+
+    for rawds_root, scenes, _ in os.walk(args.input_raw_dir):
+        num_scenes = len(str(len(scenes)))
         for scene_idx, scene in enumerate(sorted(scenes)):
-            proc_scenedir = 's{}_{}'.format(scene_idx+1, name_slugify(scene))
-            for sn_root, _, raw_files in os.walk(os.path.join(ds_root, scene)):
-                proc_filedir = os.path.join(args.output_dir, proc_scenedir)
-                exp_times = []
+            scene_prefix = 's{:0{num_scenes}}'.format(scene_idx+1,
+                num_scenes=num_scenes)
+            scene_name_slug = name_slugify(scene)
+            scene_dirname = scene_prefix + '_' + scene_name_slug
 
-                for raw_filename in raw_files:
-                    raw_filepath = os.path.join(sn_root, raw_filename)
+            for scene_root, _, imgs in os.walk(os.path.join(rawds_root, scene)):
+                rgb_filedir = os.path.join(args.output_rgb_dir, scene_dirname)
 
-                    proc_filename = os.path.splitext(raw_filename)[0] + '.png'
-                    proc_filepath = os.path.join(proc_filedir, proc_filename)
+                raw_filenames = [img for img in imgs if \
+                    img.lower().endswith('.nef')]
+
+                raw_exp_times = []
+
+                for raw_filename in sorted(raw_filenames):
+                    raw_filepath = os.path.join(scene_root, raw_filename)
+                    raw_suffix = os.path.splitext(raw_filename)[0].strip('_') \
+                        .lower()
+
+                    rgb_filename = '{}_{}.{}'.format(scene_prefix, raw_suffix,
+                        args.output_fm)
+                    rgb_filepath = os.path.join(rgb_filedir, rgb_filename)
+
+                    exp_filename = scene_prefix + '_exp_times.txt'
+                    exp_filepath = os.path.join(rgb_filedir, exp_filename)
 
                     # Cache the exposure times for HDR reconstruction
                     metadata = pyexiv2.ImageMetadata(raw_filepath)
                     metadata.read()
                     exp_time = float(metadata['Exif.Photo.ExposureTime'].value)
-                    exp_times.append((proc_filepath, exp_time))
+                    raw_exp_times.append((rgb_filepath, exp_time))
 
                     # Convert raw files to 8-bit RGB
-                    if not(os.path.isfile(proc_filepath)) or args.force:
-                        if not os.path.exists(proc_filedir):
-                            os.makedirs(proc_filedir)
-                        print('Processing: {}'.format(proc_filepath))
+                    if not(os.path.isfile(rgb_filepath)) or args.force:
+                        if not os.path.exists(rgb_filedir):
+                            os.makedirs(rgb_filedir)
+                        print('Processing: ' + rgb_filepath)
+                        print('  input_fn: ' + raw_filepath)
+                        print('  exp_time: ' + str(exp_time))
                         with rawpy.imread(raw_filepath) as raw_file:
                             rgb = raw_file.postprocess()
-                        imageio.imwrite(proc_filepath, rgb)
+                        imageio.imwrite(rgb_filepath, rgb)
+                        file_processed = True
 
-                # Generate HDR image using OpenCV
-                if len(exp_times) == 0:
-                    print('Unable to retrieve exposure times for raws in: {}' \
-                        .format(proc_filedir))
-                    print('Skipping HDR image reconstruction')
-                    break
+                    snslugs_rgb.append((scene_name_slug, rgb_filepath))
 
-                proc_hdr_filepath = os.path.join(proc_filedir,
-                    's{}_hdr-{}.png'.format(scene_idx+1, args.tone_map_algo))
+                # Write exp_times file
+                if not(os.path.isfile(exp_filepath)) or args.force:
+                    print('Processing: ' + exp_filepath)
+                    print('  scene_root: ' + scene_root)
+                    with open(exp_filepath, 'w') as exp_file:
+                        for raw_exp_time in raw_exp_times:
+                            exp_file.write('{},{}\n'.format(raw_exp_time[0],
+                                raw_exp_time[1]))
+                    file_processed = True
 
-                if os.path.isfile(proc_hdr_filepath) and not(args.force):
-                    return
+    if not files_processed:
+        print('conv_raw_images: No files processed, use \'--force\' to ' \
+            'overwrite existing outputs')
 
-                print('Processing: {}'.format(proc_hdr_filepath))
+    return snslugs_rgb
 
-                ldr_images = []
-                ldr_exp_times = []
-                for rgb_filepath, exp_time in exp_times:
-                    ldr_images.append(cv2.imread(rgb_filepath))
-                    ldr_exp_times.append(exp_time)
-                ldr_exp_times = np.array(ldr_exp_times, dtype=np.float32)
+def link_test_pairs(snslugs_rgb):
+    snslugs = list(set([a for a, b in snslugs_rgb]))
+    snslugs_norm = [re.sub(r'[()\-]', '', snslug.lower()) for snslug in snslugs]
+    snslugs_norm_map = {}
+    for i, snslug_norm in enumerate(snslugs_norm):
+        snslugs_norm_map[snslugs[i]] = snslug_norm
 
-                # Estimate Camera response function, merge exposures
-                calib_debevec = cv2.createCalibrateDebevec()
-                resp_debevec = calib_debevec.process(ldr_images, ldr_exp_times)
-                merge_debevec = cv2.createMergeDebevec()
-                hdr_debevec = merge_debevec.process(ldr_images, ldr_exp_times,
-                    resp_debevec)
+    snslugs_norm_rend_map = {}
 
-                # Tone mapping
-                if args.tone_map_algo == 'reinhard':
-                    tone_map = cv2.createTonemapReinhard(1.5, 0,0,0)
-                    ldr_output = tone_map.process(hdr_debevec)
-                    cv2.imwrite(proc_hdr_filepath, ldr_output * 255)
-                elif args.tone_map_algo == 'durand':
-                    tone_map = cv2.createTonemapDurand(1.5,4,1.0,1,1)
-                    ldr_output = 3 * tone_map.process(hdr_debevec)
-                    cv2.imwrite(proc_hdr_filepath, ldr_output * 255)
+    rendds_root = args.input_rend_dir
+    rend_filenames = [rf for rf in os.listdir(rendds_root) \
+        if os.path.isfile(os.path.join(rendds_root, rf))]
 
-def resize_proc_images():
-    pass
+    for rend_filename in rend_filenames:
+        rend_norm = rend_filename.lower()
+        rend_norm = re.sub(r'[()]', '', rend_norm)
 
-def write_test_pairs():
-    pass
+        for snslug_norm in snslugs_norm:
+            if rend_norm.startswith(snslug_norm):
+                rend_filepath = os.path.join(rendds_root, rend_filename)
+                snslugs_norm_rend_map[snslug_norm] = rend_filepath
+                snslugs_norm.remove(snslug_norm)
+
+    if len(snslugs_norm) > 0:
+        print('link_test_pairs: Warning, unable to match the following raw ' \
+            'scenes:')
+        for snslug_norm in snslugs_norm:
+            print('  ' + snslug_norm)
+
+    rend_rgb = {}
+    for i, (snslug, rgb_filepath) in enumerate(snslugs_rgb):
+        snslug_norm = snslugs_norm_map[snslug]
+        if snslug_norm in snslugs_norm_rend_map:
+            rend_filepath = snslugs_norm_rend_map[snslug_norm]
+            if rend_filepath not in rend_rgb:
+                rend_rgb[rend_filepath] = []
+            rend_rgb[rend_filepath].append(rgb_filepath)
+
+    return rend_rgb
+
+def get_rsz_short_dims(in_w, in_h):
+    out_w, out_h = parse_dims(args.output_size)
+
+    if in_h <= in_w:
+        rsz_w = math.ceil(in_w * out_h / in_h)
+        rsz_h = int(out_h)
+    else:
+        rsz_w = int(out_w)
+        rsz_h = math.ceil(in_h * out_w / in_w)
+
+    return rsz_w, rsz_h
+
+def get_img_crps(in_w, in_h):
+    out_w, out_h = parse_dims(args.output_size)
+
+    img_crps = []
+    long_px = 0
+    if in_h <= in_w:
+        while long_px + out_w < in_w:
+            img_crps.append((long_px, 0))
+            long_px += out_w
+        img_crps.append((in_w-out_w, 0))
+    else:
+        while long_px + out_h < in_h:
+            img_crps.append((0, long_px))
+            long_px += out_h
+        img_crps.append((0, in_h-out_h))
+
+    return img_crps
+
+def get_img_augm_ops(img_filepath, rend_rsz_w, rend_rsz_h):
+    out_w, out_h = parse_dims(args.output_size)
+
+    img = plt.imread(img_filepath)
+    img_tf = tf.convert_to_tensor(img)
+
+    augm_ops = []
+
+    # Scale image to output size on short edge
+    if os.path.splitext(img_filepath)[1] in ['.jpg', '.jpeg']:
+        img_rsz = tf.cast(tf.image.resize_images(img_tf,
+                size=(rend_rsz_h, rend_rsz_w),
+                method=tf.image.ResizeMethod.BILINEAR),
+            tf.uint8)
+    else:
+        img_rsz = tf.image.resize_images(img_tf,
+            size=(rend_rsz_h, rend_rsz_w),
+            method=tf.image.ResizeMethod.BILINEAR)
+
+    # Chop up image on long edge
+    img_crps = []
+    for crp_w, crp_h in get_img_crps(rend_rsz_w, rend_rsz_h):
+        img_crp = tf.image.crop_to_bounding_box(img_rsz,
+            crp_h, crp_w, out_h, out_w)
+        img_crps.append(img_crp)
+        augm_ops.append(img_crp)
+
+    # Horizontal + vertical flips on crops (mirror)
+    for img_crp in img_crps:
+        h_flip = tf.image.flip_left_right(img_crp)
+        v_flip = tf.image.flip_up_down(img_crp)
+
+        augm_ops.append(h_flip)
+        augm_ops.append(v_flip)
+        augm_ops.append(tf.image.flip_left_right(v_flip))
+
+    # 90 deg. rotations on crops
+    for img_crp in img_crps:
+        augm_ops.append(tf.image.rot90(img_crp, 1))
+        augm_ops.append(tf.image.rot90(img_crp, 2))
+        augm_ops.append(tf.image.rot90(img_crp, 3))
+
+    return augm_ops
+
+def gen_nn_dataset(rend_rgb=None):
+    x_filedir = os.path.join(args.output_nn_dir, 'x')
+    y_filedir = os.path.join(args.output_nn_dir, 'y')
+
+    if not os.path.exists(x_filedir):
+        os.makedirs(x_filedir)
+    if not os.path.exists(y_filedir):
+        os.makedirs(y_filedir)
+
+    nn_dataset = []
+    out_w, out_h = parse_dims(args.output_size)
+
+    with tf.Session().as_default():
+        samp_idx = 0
+
+        for rend_fp, rgb_fps in rend_rgb.items():
+            print('Processing: ' + rend_fp)
+            print('  len(rgb_fps): ' + str(len(rgb_fps)))
+            samp_idx_init = samp_idx
+
+            # Scene HDR render (ground truth)
+            rend_h, rend_w, _ = plt.imread(rend_fp).shape
+            rsz_w, rsz_h = get_rsz_short_dims(rend_w, rend_h)
+
+            rend_rsz_w, rend_rsz_h = rsz_w, rsz_h
+
+            rend_augm_ops = get_img_augm_ops(rend_fp, rsz_w, rsz_h)
+
+            # Iterate through each LDR exposure (inputs)
+            for rgb_fp in rgb_fps:
+                rgb_rend_ops = get_img_augm_ops(rgb_fp, rsz_w, rsz_h)
+
+                # Write out x,y sample pairs
+                for i in range(len(rgb_rend_ops)):
+                    plt.imsave(
+                        os.path.join(x_filedir, 'x{}.jpg'.format(samp_idx)),
+                        rgb_rend_ops[i].eval())
+                    plt.imsave(
+                        os.path.join(y_filedir, 'y{}.jpg'.format(samp_idx)),
+                        rend_augm_ops[i].eval())
+                    samp_idx += 1
+
+            print('  added {} samples'.format(samp_idx-samp_idx_init))
+
+    print('gen_nn_dataset: added {} training samples', samp_idx)
 
 if __name__ == '__main__':
     main()
