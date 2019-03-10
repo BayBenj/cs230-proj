@@ -4,18 +4,15 @@ import argparse
 import os
 
 import numpy as np
-import tensorflow as tf
+import pprint as pp
 
+import tensorflow as tf
 from keras.preprocessing import image
 from keras.models import Model
 from keras.layers import Input, Dense, Conv2D, Conv2DTranspose
-# from keras.optimizers import
 from keras.applications import VGG16
 import keras.backend as K
 
-import pprint as pp
-
-kernel_size = (4, 4)
 
 def main():
     global args
@@ -26,11 +23,12 @@ def main():
 
     train_model((x, y))
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Script to train HDR inference model')
     parser.add_argument('--input-dir', dest='input_dir', type=str,
-        default='data/proc_nn_dataset',
+        default='/proj/data/proc_nn_dataset',
         help='Base path to training input images dataset')
     parser.add_argument('--output-fn', dest='output_fn', type=str,
         default='hdr-infer-model.h5',
@@ -57,23 +55,29 @@ def train_model(dataset):
         verbose=2, validation_split=0.2, shuffle=True)
 
 
-def assemble_model():
-    # Encoder (VGG16)
+def encoder():
     vgg16_input = VGG16(include_top=False, weights='imagenet',
         input_shape=(224, 224, 3))
     for layer in vgg16_input.layers[:17]:
         layer.trainable = False
+    return vgg16_input
 
-    x = vgg16_input.layers[-2].output
 
-    # Decoder
-    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding='same')(x)
+def decoder(x):
+    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), activation='linear', padding="same")(x)
+    x = Conv2D(3, (1, 1), activation='sigmoid', padding="same")(x)
+    return x
 
-    model = Model(inputs=vgg16_input.input, outputs=x)    
+
+def assemble_model():
+    vgg16 = encoder()
+    x = vgg16.layers[-2].output
+    x = decoder(x)
+
+    model = Model(inputs=vgg16.input, outputs=x)
 
     model.compile(optimizer='adam', loss='binary_crossentropy',
         metrics=['accuracy'])
@@ -115,5 +119,7 @@ def load_datasets():
 
     return x, y
 
+
 if __name__ == '__main__':
     main()
+
