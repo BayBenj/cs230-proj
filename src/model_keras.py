@@ -14,6 +14,8 @@ import keras.backend as K
 
 kernel_size = (4, 4)
 
+SAME = "same"
+
 def main():
     global args
 
@@ -51,11 +53,11 @@ def assemble_model():
     x = vgg16_input.layers[-2].output
 
     # Decoder
-    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding='same')(x)
+    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding=SAME)(x)
+    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding=SAME)(x)
+    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding=SAME)(x)
+    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding=SAME)(x)
+    x = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding=SAME)(x)
 
     model = Model(inputs=vgg16_input.input, outputs=x)
 

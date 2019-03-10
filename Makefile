@@ -1,6 +1,4 @@
 VENV?=venv_cs230
-PIP?=$(VENV)/bin/pip
-PYTH?=$(VENV)/bin/python
 PROJ?=src/
 MAX_COMPLEXITY?=5
 
@@ -12,19 +10,17 @@ MAX_COMPLEXITY?=5
 .PHONY : clean-py
 .PHONY : clean
 .PHONY : fix-style
-.PHONY : check-style
 .PHONY : check-camel-case
-.PHONY : checks
 
 
 install: virtualenv
-	pip install --upgrade pip
-	pip install -r requirements.txt
+	pip3 install --upgrade pip
+	pip3 install -r requirements.txt
 
 
 virtualenv:
-	pip install virtualenv
-	python -m virtualenv $(VENV) --system-site-packages
+	pip3 install virtualenv
+	python3 -m virtualenv $(VENV) --system-site-packages
 
 
 update: pull install clean
@@ -50,17 +46,8 @@ fix-style:
 	autopep8 -r --in-place --aggressive --aggressive $(PROJ)
 
 
-# run code style checks
-check-style:
-	-$(PYTH) -m flake8 --max-complexity $(MAX_COMPLEXITY) $(PROJ)
-	-pylint $(PROJ)
-
-
 # finds all strings in project that begin with a lowercase letter, contain only letters and numbers, and contain at least one lowercase letter and at least one uppercase letter.
 check-camel-case: clean-py
 	grep -rnw $(PROJ) -e "[a-z]\([A-Z0-9]*[a-z][a-z0-9]*[A-Z]\|[a-z0-9]*[A-Z][A-Z0-9]*[a-z]\)[A-Za-z0-9]*"
 
-
-# run all checks
-checks: check-style check-camel-case
 
