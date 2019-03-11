@@ -9,7 +9,7 @@ import pprint as pp
 
 from keras.preprocessing import image
 from keras.models import Model
-from keras.layers import Input, Dense, Conv2D, Conv2DTranspose
+from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 import keras.backend as K
@@ -75,6 +75,7 @@ def ldr_encoder():
 
 def decoder_layer(nn_in, n_filters, filter_size, stride, pad="same", act="linear"):
     nn = Conv2DTranspose(n_filters, filter_size, strides=stride, padding=pad, activation=act)(nn_in)
+    nn = BatchNormalization()(nn)
     return nn
 
 
@@ -83,8 +84,8 @@ def hdr_decoder(latent_rep):
     network = decoder_layer(network, 128, 3, 2)
     network = decoder_layer(network, 64, 3, 2)
     network = decoder_layer(network, 32, 3, 2)
-    network = decoder_layer(network, 3, 1, 1, act='sigmoid')
-    return network
+    result = decoder_layer(network, 3, 1, 1, act='sigmoid')
+    return result
 
 
 def assemble_model():
