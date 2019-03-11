@@ -14,6 +14,7 @@ from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 import keras.backend as K
 
+CONV_FACTOR = np.log(10)
 
 def main():
     global args
@@ -68,7 +69,7 @@ def custom_loss(yTrue, yPred):
 
 
 def psnr(yTrue, yPred):
-    return 10 * K.log( 1 / K.mean(K.square(yTrue - yPred)) ) / 2.3
+    return 10 * K.log(1 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 #    print(mse)
 #    if mse == 0:
 #        return 100
