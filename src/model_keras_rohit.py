@@ -37,9 +37,9 @@ def parse_args():
         default='hdr-infer-model.h5',
         help='Output model filename')
     parser.add_argument('--max-samples', dest='max_samples', type=int,
-        default=100)
+        default=1000)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
-        default=100)
+        default=50)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
 
