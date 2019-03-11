@@ -4,3 +4,4 @@ venv_cs230
 *.py[cod]
 __pycache__/
 data/
+model_tf.py
