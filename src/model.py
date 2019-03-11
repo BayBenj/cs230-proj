@@ -67,7 +67,7 @@ def custom_loss(yTrue, yPred):
 
 
 def psnr(yTrue, yPred):
-    return 20 * K.log(1 / K.mean(K.square(yTrue - yPred))) / 2.3
+    return 10 * K.log( 1 / K.mean(K.square(yTrue - yPred)) ) / 2.3
 #    print(mse)
 #    if mse == 0:
 #        return 100
