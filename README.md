@@ -1,13 +1,16 @@
 # cs230-proj
 
 ## TODO
-> Serialize the model
-    > Also reload the serialized model
+> Serialize and reload the model
+    
 > Log to an output file
+
 > Add skip-connections
+
 > Add BatchNorm in decoder
+
 > Print layer details
-> Figure: matplotlib
+
 > Split on the basis of scenes
 
 ## Setup
