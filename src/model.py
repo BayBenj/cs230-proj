@@ -4,17 +4,20 @@ import argparse
 import os
 
 import numpy as np
-import tensorflow as tf
 import pprint as pp
+import matplotlib.pyplot as plt
 
+import tensorflow as tf
 from keras.preprocessing import image
 from keras.models import Model
 from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
+from keras.callbacks import History
 import keras.backend as K
 
 CONV_FACTOR = np.log(10)
+history = History()
 
 def main():
     global args
@@ -22,6 +25,7 @@ def main():
     x, y = load_datasets()
     model = train_model((x, y))
     predict_model(model, x[0:1])
+    plot()
 
 
 def parse_args():
@@ -36,7 +40,7 @@ def parse_args():
     parser.add_argument('--max-samples', dest='max_samples', type=int,
                         default=1000)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
-        default=20)
+        default=100)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
                         default=32)
 
@@ -48,7 +52,7 @@ def train_model(dataset):
     X, Y = dataset
     model.summary()
     model.fit(X, Y, epochs=args.num_epochs, batch_size=args.batch_size,
-        verbose=2, validation_split=0.2, shuffle=True)
+        verbose=2, validation_split=0.2, shuffle=True, callbacks=[history])
     
     return model
 
@@ -150,6 +154,16 @@ def load_datasets():
     y = y[idx]
 
     return x, y
+
+
+def plot():
+    for metric, vals in history.history.items():
+        plt.plot(range(1,len(vals) + 1),vals)
+    plt.legend(history.history.keys(), loc='center left')
+    #plt.ylabel('Loss')
+    # plt.ylabel('Mean Squared Error')
+    plt.xlabel('Epoch')
+    plt.savefig('figure.png', dpi=100)
 
 
 if __name__ == '__main__':
