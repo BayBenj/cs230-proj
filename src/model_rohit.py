@@ -5,27 +5,22 @@ import os
 
 import numpy as np
 import tensorflow as tf
+import pprint as pp
 
 from keras.preprocessing import image
 from keras.models import Model
 from keras.layers import Input, Dense, Conv2D, Conv2DTranspose
-# from keras.optimizers import
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 import keras.backend as K
 
-import pprint as pp
-
-kernel_size = (4, 4)
 
 def main():
     global args
-
     args = parse_args()
-
     x, y = load_datasets()
-
     train_model((x, y))
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -45,49 +40,60 @@ def parse_args():
 
     return parser.parse_args()
 
+
 def train_model(dataset):
     model = assemble_model()
-
     X, Y = dataset
-
     model.summary()
-
     model.fit(X, Y, epochs=args.num_epochs, batch_size=args.batch_size,
         verbose=2, validation_split=0.2, shuffle=True)
 
-def customLoss(yTrue, yPred):
+
+def custom_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
-def PSNRMetric(yTrue, yPred):
+
+def psnr(yTrue, yPred):
     return 20 * K.log( 1 / K.mean(K.square(yTrue - yPred)) ) / 2.3
 #    print(mse)
 #    if mse == 0:
 #        return 100
 #    PIXEL_MAX = 255.0
 #    return 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
-#
-def assemble_model():
-    # Encoder (VGG16)
+
+
+def ldr_encoder():
     vgg16_input = VGG16(include_top=False, weights='imagenet',
         input_shape=(224, 224, 3))
     for layer in vgg16_input.layers[:17]:
         layer.trainable = False
-
     x = vgg16_input.layers[-2].output
+    return x, vgg16_input
 
-    # Decoder
-    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(x)
+
+def hdr_decoder(latent_rep):
+    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(latent_rep)
     x = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(x)
     x = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(x)
     x = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same')(x)
     x = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding='same')(x)
+    return x
+
+
+def assemble_model():
+    # Encoder (VGG16)
+    x, vgg16_input = ldr_encoder()
+
+    # Decoder
+    x = hdr_decoder(x)
 
     model = Model(inputs=vgg16_input.input, outputs=x)    
 
-    model.compile(optimizer='adam', loss=customLoss,
-        metrics=['accuracy', PSNRMetric])
+    model.compile(optimizer='adam', loss=custom_loss,
+        metrics=['accuracy', psnr])
 
     return model
+
 
 def load_datasets():
     x_fd = os.path.join(args.input_dir, 'x')
@@ -123,3 +129,4 @@ def load_datasets():
 
 if __name__ == '__main__':
     main()
+
