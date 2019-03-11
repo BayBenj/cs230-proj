@@ -19,10 +19,9 @@ def main():
     global args
     args = parse_args()
     x, y = load_datasets()
-    
     model = train_model((x, y))
-    
     predict_model(model, x[0:1])
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -52,6 +51,7 @@ def train_model(dataset):
     
     return model
 
+
 def predict_model(model, img):
     out_img = model.predict(img[0:1])
     out_img = out_img * 255
@@ -61,6 +61,7 @@ def predict_model(model, img):
     #print(pred_img.shape)
     pred_img.save('out_img.jpg')
     inp_img.save('inp_img.jpg')
+
 
 def custom_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
