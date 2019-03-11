@@ -26,17 +26,17 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Script to train HDR inference model')
     parser.add_argument('--input-dir', dest='input_dir', type=str,
-        default='/proj/data/proc_nn_dataset',
-        help='Base path to training input images dataset')
+                        default='/proj/data/proc_nn_dataset',
+                        help='Base path to training input images dataset')
     parser.add_argument('--output-fn', dest='output_fn', type=str,
-        default='hdr-infer-model.h5',
-        help='Output model filename')
+                        default='hdr-infer-model.h5',
+                        help='Output model filename')
     parser.add_argument('--max-samples', dest='max_samples', type=int,
-        default=1000)
+                        default=1000)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
-        default=50)
+                        default=50)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
-        default=32)
+                        default=32)
 
     return parser.parse_args()
 
@@ -63,34 +63,32 @@ def psnr(yTrue, yPred):
 
 
 def ldr_encoder():
-    vgg16_input = VGG16(include_top=False, weights='imagenet',
-        input_shape=(224, 224, 3))
+    vgg16_input = VGG16(include_top=False, weights='imagenet', input_shape=(224, 224, 3))
     for layer in vgg16_input.layers[:17]:
         layer.trainable = False
-    x = vgg16_input.layers[-2].output
-    return x, vgg16_input
+    result = vgg16_input.layers[-2].output
+    return result, vgg16_input
 
 
 def hdr_decoder(latent_rep):
-    x = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(latent_rep)
-    x = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same')(x)
-    x = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding='same')(x)
-    return x
+    network = Conv2DTranspose(256, (3, 3), strides=(2, 2), padding='same')(latent_rep)
+    network = Conv2DTranspose(128, (3, 3), strides=(2, 2), padding='same')(network)
+    network = Conv2DTranspose(64, (3, 3), strides=(2, 2), padding='same')(network)
+    network = Conv2DTranspose(32, (3, 3), strides=(2, 2), padding='same')(network)
+    network = Conv2DTranspose(3, (1, 1), activation='sigmoid', padding='same')(network)
+    return network
 
 
 def assemble_model():
     # Encoder (VGG16)
-    x, vgg16_input = ldr_encoder()
+    latent_rep, vgg16_input = ldr_encoder()
 
     # Decoder
-    x = hdr_decoder(x)
+    x = hdr_decoder(latent_rep)
 
     model = Model(inputs=vgg16_input.input, outputs=x)    
-
     model.compile(optimizer='adam', loss=custom_loss,
-        metrics=['accuracy', psnr])
+        metrics=[psnr])
 
     return model
 
