@@ -25,7 +25,9 @@ def main():
 
     x, y = load_datasets()
 
-    train_model((x, y))
+    model = train_model((x, y))
+
+    predict_model(model, x[0:1])
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -37,9 +39,9 @@ def parse_args():
         default='hdr-infer-model.h5',
         help='Output model filename')
     parser.add_argument('--max-samples', dest='max_samples', type=int,
-        default=100)
+        default=1000)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
-        default=100)
+        default=20)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
 
@@ -54,6 +56,18 @@ def train_model(dataset):
 
     model.fit(X, Y, epochs=args.num_epochs, batch_size=args.batch_size,
         verbose=2, validation_split=0.2, shuffle=True)
+    
+    return model
+
+def predict_model(model, img):
+    out_img = model.predict(img[0:1])
+    out_img = out_img * 255
+    print(out_img.shape)
+    pred_img = image.array_to_img(out_img[0])
+    inp_img = image.array_to_img(img[0] * 255)
+    #print(pred_img.shape)
+    pred_img.save('out_img.jpg')
+    inp_img.save('inp_img.jpg')
 
 def customLoss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
@@ -107,7 +121,9 @@ def load_datasets():
             y.append(image.img_to_array(image.load_img(imgy_fp)))
     
     x = np.asarray(x) / 255
+    print(x.shape)
     y = np.asarray(y) / 255
+    print(y.shape)
 
     # Normalize input images
     #x = preprocess_input(x)
