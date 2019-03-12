@@ -19,6 +19,8 @@ import keras.backend as K
 CONV_FACTOR = np.log(10)
 history = History()
 
+VGG_MEAN = [103.939, 116.779, 123.68]
+
 def main():
     global args
     args = parse_args()
@@ -38,7 +40,7 @@ def parse_args():
                         default='hdr-infer-model.h5',
                         help='Output model filename')
     parser.add_argument('--max-samples', dest='max_samples', type=int,
-                        default=1000)
+                        default=None)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
         default=100)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
@@ -52,17 +54,17 @@ def train_model(dataset):
     X, Y = dataset
     model.summary()
     model.fit(X, Y, epochs=args.num_epochs, batch_size=args.batch_size,
-        verbose=2, validation_split=0.2, shuffle=True, callbacks=[history])
+        verbose=1, validation_split=0.2, shuffle=True, callbacks=[history])
     
     return model
 
 
 def predict_model(model, img):
     out_img = model.predict(img[0:1])
-    out_img = out_img * 255
+    out_img = (out_img + 1) * 127.5
     print(out_img.shape)
     pred_img = image.array_to_img(out_img[0])
-    inp_img = image.array_to_img(img[0] * 255)
+    inp_img = image.array_to_img((img[0] + 1) * 127.5)
     #print(pred_img.shape)
     pred_img.save('out_img.jpg')
     inp_img.save('inp_img.jpg')
@@ -73,7 +75,7 @@ def custom_loss(yTrue, yPred):
 
 
 def psnr(yTrue, yPred):
-    return 10 * K.log(1 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
+    return 10 * K.log(2 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 #    print(mse)
 #    if mse == 0:
 #        return 100
@@ -86,7 +88,7 @@ def ldr_encoder():
         include_top=False,
         weights='imagenet',
         input_shape=(224, 224, 3))
-    for layer in vgg16_input.layers[:15]:
+    for layer in vgg16_input.layers[:17]:
         layer.trainable = False
     inp_img = vgg16_input.layers[0].input
     skip1 = vgg16_input.layers[2].output
@@ -111,23 +113,23 @@ def hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep):
     network = decoder_layer(latent_rep, 512, 3, 2)
     
     network = Concatenate(axis = -1)([network, skip4])
-    network = Conv2D(512, 1, activation='relu')(network)
+    network = Conv2D(512, 1, activation='linear')(network)
     network = decoder_layer(network, 256, 3, 2)
     
     network = Concatenate(axis = -1)([network, skip3])
-    network = Conv2D(256, 1, activation='relu')(network)
+    network = Conv2D(256, 1, activation='linear')(network)
     network = decoder_layer(network, 128, 3, 2)
     
     network = Concatenate(axis = -1)([network, skip2])
-    network = Conv2D(128, 1, activation='relu')(network)
+    network = Conv2D(128, 1, activation='linear')(network)
     network = decoder_layer(network, 64, 3, 2)
     
     network = Concatenate(axis = -1)([network, skip1])
-    network = Conv2D(64, 1, activation='relu')(network)
-    network = Conv2D(3, 1, activation='relu')(network)
+    network = Conv2D(64, 1, activation='linear')(network)
+    network = Conv2D(3, 1, activation='linear')(network)
     
     network = Concatenate(axis = -1)([network, inp_img])
-    result = Conv2D(3, 1, activation='relu')(network)
+    result = Conv2D(3, 1, activation='linear')(network)
     #result = decoder_layer(network, 3, 1, 1, act='sigmoid')
     return result
 
@@ -160,12 +162,26 @@ def load_datasets():
         imgy_fp = os.path.join(y_fd, imgy_fn)
         if os.path.isfile(imgx_fp):
             assert(os.path.isfile(imgy_fp))
+            #x = image.img_to_array(image.load_img(imgx_fp))
+            #print("Original Image:")
+            #print(x[0:3, 0:3, :])
+            #red = x[:, :, 0:1] - VGG_MEAN[2]
+            #green = x[:, :, 1:2] - VGG_MEAN[1]
+            #blue = x[:, :, 2:3] - VGG_MEAN[0]
+            #bgr = np.concatenate([blue, green, red], axis = -1)
+            #print(bgr.shape)
+            #print("My Procesing:")
+            #print(bgr[0:3, 0:3, :])
+            #x_process = preprocess_input(x, mode = 'tf')
+            #print("Keras Processing:")
+            #print(x_process[0:3, 0:3, :])
             x.append(image.img_to_array(image.load_img(imgx_fp)))
             y.append(image.img_to_array(image.load_img(imgy_fp)))
 
-    x = np.asarray(x) / 255
+    x = (np.asarray(x) / 127.5) - 1
+    #x = np.asarray(x) / 255
     print(x.shape)
-    y = np.asarray(y) / 255
+    y = (np.asarray(y) / 127.5) - 1
     print(y.shape)
 
     # Normalize input images
