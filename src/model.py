@@ -64,8 +64,8 @@ def predict_model(model, img):
     pred_img = image.array_to_img(out_img[0])
     inp_img = image.array_to_img(img[0] * 255)
     #print(pred_img.shape)
-    pred_img.save('out_img.jpg')
-    inp_img.save('inp_img.jpg')
+#    pred_img.save('out_img.jpg')
+#    inp_img.save('inp_img.jpg')
 
 
 def custom_loss(yTrue, yPred):
@@ -157,13 +157,25 @@ def load_datasets():
 
 
 def plot():
-    for metric, vals in history.history.items():
-        plt.plot(range(1,len(vals) + 1),vals)
-    plt.legend(history.history.keys(), loc='center left')
-    #plt.ylabel('Loss')
-    # plt.ylabel('Mean Squared Error')
+    plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
+    plt.plot(range(0,len(history.history["val_psnr"])), history.history["val_psnr"])
+    plt.legend(["train","dev"], loc='center left')
+    plt.ylabel('PSNR')
     plt.xlabel('Epoch')
-    plt.savefig('figure.png', dpi=100)
+    plt.savefig('psnr.png', dpi=100)
+    plt.clf()
+
+    plt.plot(range(0,len(history.history["loss"])), history.history["loss"])
+    plt.plot(range(0,len(history.history["val_loss"])), history.history["val_loss"])
+    plt.legend(["train","dev"], loc='center left')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.savefig('loss.png', dpi=100)
+    plt.clf()
+
+#    for metric, vals in history.history.items():
+#        plt.plot(range(1,len(vals) + 1),vals)
+    # plt.ylabel('Mean Squared Error')
 
 
 if __name__ == '__main__':
