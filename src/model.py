@@ -64,8 +64,8 @@ def predict_model(model, img):
     pred_img = image.array_to_img(out_img[0])
     inp_img = image.array_to_img(img[0] * 255)
     #print(pred_img.shape)
-#    pred_img.save('out_img.jpg')
-#    inp_img.save('inp_img.jpg')
+    pred_img.save('out_img.jpg')
+    inp_img.save('inp_img.jpg')
 
 
 def custom_loss(yTrue, yPred):
