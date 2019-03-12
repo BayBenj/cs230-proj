@@ -6,6 +6,9 @@ import os
 import numpy as np
 import pprint as pp
 import matplotlib.pyplot as plt
+import time
+import datetime
+import pytz
 
 import tensorflow as tf
 from keras.preprocessing import image
@@ -18,6 +21,21 @@ import keras.backend as K
 
 CONV_FACTOR = np.log(10)
 history = History()
+
+
+def timestamp():
+    def utc_to_local(utc_dt):
+        local_tz = pytz.timezone('US/Pacific')
+        local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        return local_tz.normalize(local_dt)
+    now = datetime.datetime.utcnow()
+    dt = utc_to_local(now)
+    formatted = dt.strftime("%Y%m%d-%H%M%S")
+    return formatted
+
+
+time = timestamp()
+
 
 def main():
     global args
@@ -64,8 +82,8 @@ def predict_model(model, img):
     pred_img = image.array_to_img(out_img[0])
     inp_img = image.array_to_img(img[0] * 255)
     #print(pred_img.shape)
-    pred_img.save('out_img.jpg')
-    inp_img.save('inp_img.jpg')
+    pred_img.save("out_img_{}.jpg".format(time))
+    inp_img.save("inp_img_{}.jpg".format(time))
 
 
 def custom_loss(yTrue, yPred):
@@ -182,13 +200,21 @@ def load_datasets():
 
 
 def plot():
-    for metric, vals in history.history.items():
-        plt.plot(range(1,len(vals) + 1),vals)
-    plt.legend(history.history.keys(), loc='center left')
-    #plt.ylabel('Loss')
-    # plt.ylabel('Mean Squared Error')
+    plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
+    plt.plot(range(0,len(history.history["val_psnr"])), history.history["val_psnr"])
+    plt.legend(["train","dev"], loc='center left')
+    plt.ylabel('PSNR')
     plt.xlabel('Epoch')
-    plt.savefig('figure.png', dpi=100)
+    plt.savefig("psnr_{}.png".format(time), dpi=100)
+    plt.clf()
+
+    plt.plot(range(0,len(history.history["loss"])), history.history["loss"])
+    plt.plot(range(0,len(history.history["val_loss"])), history.history["val_loss"])
+    plt.legend(["train","dev"], loc='center left')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.savefig("loss_{}.png".format(time), dpi=100)
+    plt.clf()
 
 
 if __name__ == '__main__':
