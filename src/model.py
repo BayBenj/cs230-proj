@@ -6,11 +6,14 @@ import os
 import numpy as np
 import pprint as pp
 import matplotlib.pyplot as plt
+import time
+import datetime
+import pytz
 
 import tensorflow as tf
 from keras.preprocessing import image
 from keras.models import Model
-from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization
+from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization, Concatenate
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 from keras.callbacks import History
@@ -18,6 +21,21 @@ import keras.backend as K
 
 CONV_FACTOR = np.log(10)
 history = History()
+
+
+def timestamp():
+    def utc_to_local(utc_dt):
+        local_tz = pytz.timezone('US/Pacific')
+        local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        return local_tz.normalize(local_dt)
+    now = datetime.datetime.utcnow()
+    dt = utc_to_local(now)
+    formatted = dt.strftime("%Y%m%d-%H%M%S")
+    return formatted
+
+
+time = timestamp()
+
 
 def main():
     global args
@@ -64,8 +82,8 @@ def predict_model(model, img):
     pred_img = image.array_to_img(out_img[0])
     inp_img = image.array_to_img(img[0] * 255)
     #print(pred_img.shape)
-#    pred_img.save('out_img.jpg')
-#    inp_img.save('inp_img.jpg')
+    pred_img.save("out_img_{}.jpg".format(time))
+    inp_img.save("inp_img_{}.jpg".format(time))
 
 
 def custom_loss(yTrue, yPred):
@@ -86,10 +104,19 @@ def ldr_encoder():
         include_top=False,
         weights='imagenet',
         input_shape=(224, 224, 3))
-    for layer in vgg16_input.layers[:17]:
+    for layer in vgg16_input.layers[:15]:
         layer.trainable = False
+    inp_img = vgg16_input.layers[0].input
+    skip1 = vgg16_input.layers[2].output
+    skip2 = vgg16_input.layers[5].output
+    skip3 = vgg16_input.layers[9].output
+    skip4 = vgg16_input.layers[13].output
+    print(skip1.shape)
+    print(skip2.shape)
+    print(skip3.shape)
+    print(skip4.shape)
     result = vgg16_input.layers[-2].output
-    return result, vgg16_input
+    return inp_img, skip1, skip2, skip3, skip4, result, vgg16_input
 
 
 def decoder_layer(nn_in, n_filters, filter_size, stride, pad="same", act="linear"):
@@ -98,21 +125,37 @@ def decoder_layer(nn_in, n_filters, filter_size, stride, pad="same", act="linear
     return nn
 
 
-def hdr_decoder(latent_rep):
-    network = decoder_layer(latent_rep, 256, 3, 2)
+def hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep):
+    network = decoder_layer(latent_rep, 512, 3, 2)
+    
+    network = Concatenate(axis = -1)([network, skip4])
+    network = Conv2D(512, 1, activation='relu')(network)
+    network = decoder_layer(network, 256, 3, 2)
+    
+    network = Concatenate(axis = -1)([network, skip3])
+    network = Conv2D(256, 1, activation='relu')(network)
     network = decoder_layer(network, 128, 3, 2)
+    
+    network = Concatenate(axis = -1)([network, skip2])
+    network = Conv2D(128, 1, activation='relu')(network)
     network = decoder_layer(network, 64, 3, 2)
-    network = decoder_layer(network, 32, 3, 2)
-    result = decoder_layer(network, 3, 1, 1, act='sigmoid')
+    
+    network = Concatenate(axis = -1)([network, skip1])
+    network = Conv2D(64, 1, activation='relu')(network)
+    network = Conv2D(3, 1, activation='relu')(network)
+    
+    network = Concatenate(axis = -1)([network, inp_img])
+    result = Conv2D(3, 1, activation='relu')(network)
+    #result = decoder_layer(network, 3, 1, 1, act='sigmoid')
     return result
 
 
 def assemble_model():
     # Encoder (VGG16)
-    latent_rep, vgg16_input = ldr_encoder()
+    inp_img, skip1, skip2, skip3, skip4, latent_rep, vgg16_input = ldr_encoder()
 
     # Decoder
-    x = hdr_decoder(latent_rep)
+    x = hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep)
 
     model = Model(inputs=vgg16_input.input, outputs=x)
     model.compile(optimizer='adam', loss=custom_loss,
@@ -162,7 +205,7 @@ def plot():
     plt.legend(["train","dev"], loc='center left')
     plt.ylabel('PSNR')
     plt.xlabel('Epoch')
-    plt.savefig('psnr.png', dpi=100)
+    plt.savefig("psnr_{}.png".format(time), dpi=100)
     plt.clf()
 
     plt.plot(range(0,len(history.history["loss"])), history.history["loss"])
@@ -170,12 +213,8 @@ def plot():
     plt.legend(["train","dev"], loc='center left')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
-    plt.savefig('loss.png', dpi=100)
+    plt.savefig("loss_{}.png".format(time), dpi=100)
     plt.clf()
-
-#    for metric, vals in history.history.items():
-#        plt.plot(range(1,len(vals) + 1),vals)
-    # plt.ylabel('Mean Squared Error')
 
 
 if __name__ == '__main__':
