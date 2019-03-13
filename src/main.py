@@ -6,7 +6,6 @@ import os
 import numpy as np
 import pprint as pp
 import matplotlib.pyplot as plt
-import time
 import datetime
 import pytz
 
@@ -35,8 +34,8 @@ def main():
     args = parse_args()
     x, y = load_datasets()
     m = model.train((x, y), args.num_epochs, args.batch_size)
-    m.predict(model, x[0:1])
-    plot()
+    model.predict_imgs(m, x[0:1], time)
+    model.plot(time)
 
 
 def parse_args():
@@ -49,9 +48,9 @@ def parse_args():
                         default='hdr-infer-model.h5',
                         help='Output model filename')
     parser.add_argument('--max-samples', dest='max_samples', type=int,
-                        default=None)
+                        default=1000)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
-        default=1)
+        default=5)
     parser.add_argument('--batch_size', dest='batch_size', type=int,
                         default=32)
 
@@ -105,24 +104,6 @@ def load_datasets():
     y = y[idx]
 
     return x, y
-
-
-def plot(history):
-    plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
-    plt.plot(range(0,len(history.history["val_psnr"])), history.history["val_psnr"])
-    plt.legend(["train","dev"], loc='center left')
-    plt.ylabel('PSNR')
-    plt.xlabel('Epoch')
-    plt.savefig("output/psnr_{}.png".format(time), dpi=100)
-    plt.clf()
-
-    plt.plot(range(0,len(history.history["loss"])), history.history["loss"])
-    plt.plot(range(0,len(history.history["val_loss"])), history.history["val_loss"])
-    plt.legend(["train","dev"], loc='center left')
-    plt.ylabel('Loss')
-    plt.xlabel('Epoch')
-    plt.savefig("output/loss_{}.png".format(time), dpi=100)
-    plt.clf()
 
 
 if __name__ == '__main__':
