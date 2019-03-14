@@ -1,5 +1,6 @@
 import argparse
 import os
+from contextlib import redirect_stdout
 
 import numpy as np
 import pprint as pp
@@ -13,6 +14,7 @@ from keras.models import Model
 from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization, Concatenate
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
+from keras.optimizers import Adam, SGD
 from keras.callbacks import History
 import keras.backend as K
 
@@ -85,9 +87,15 @@ def assemble():
     x = hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep)
 
     model = Model(inputs=vgg16_input.input, outputs=x)
-    model.compile(optimizer='adam', loss=custom_loss, metrics=[psnr])
+
+    # model.compile(optimizer='adam', loss=custom_loss, metrics=[psnr])
+    optimi = Adam()
+
+    model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr])
 
     return model
+
+
 
 def train(XY_train, XY_dev, epochs, batch_size):
     model = assemble()
@@ -105,7 +113,12 @@ def train(XY_train, XY_dev, epochs, batch_size):
 
     return model
 
-def predict_imgs(model, imgs, out_fd):
+def write_summary(model, out_fd):
+    with open(os.path.join(out_fd, 'summary.txt'), 'w') as summ_file:
+        with redirect_stdout(summ_file):
+            model.summary()
+
+def predict_imgs(model, imgs, out_fd, fn_tag):
     img_X, img_Y = imgs
 
     out_img = model.predict(img_X[0:1])
@@ -116,9 +129,9 @@ def predict_imgs(model, imgs, out_fd):
     Y_img = image.array_to_img((img_Y[0] + 1) * 127.5)
     Yhat_img = image.array_to_img(out_img[0])
 
-    X_img.save(os.path.join(out_fd, 'x.jpg'))
-    Y_img.save(os.path.join(out_fd, 'y.jpg'))
-    Yhat_img.save(os.path.join(out_fd, 'yhat.jpg'))
+    X_img.save(os.path.join(out_fd, 'x-{}.jpg'.format(fn_tag)))
+    Y_img.save(os.path.join(out_fd, 'y-{}.jpg'.format(fn_tag)))
+    Yhat_img.save(os.path.join(out_fd, 'yhat-{}.jpg'.format(fn_tag)))
 
 def plot(out_fd):
     plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])

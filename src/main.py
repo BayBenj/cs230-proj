@@ -37,13 +37,24 @@ def main():
     m = model.train(XY_train, XY_dev, args.num_epochs, args.batch_size)
 
     # Save outputs
-    out_fd = os.path.join(args.output_dir, 'model_{}'.format(time))
+    out_fd = os.path.join(args.output_dir, 'model_{}_epch{}_bs{}_trn{}_val{}' \
+        .format(time, args.num_epochs, args.batch_size,
+            len(XY_train[0]), len(XY_dev[0])))
     os.makedirs(out_fd)
 
+    print('Processing: ' + out_fd)
+
+    model.write_summary(m, out_fd)
     if args.save_model:
         model.save(m, out_fd)
-    model.predict_imgs(m, (XY_dev[0][0:1], XY_dev[1][0:1]), out_fd)
     model.plot(out_fd)
+
+    model.predict_imgs(m, (XY_dev[0][0:1], XY_dev[1][0:1]), out_fd, 'dev0')
+    model.predict_imgs(m, (XY_dev[0][3:4], XY_dev[1][3:4]), out_fd, 'dev4')
+    model.predict_imgs(m, (XY_train[0][0:1], XY_train[1][0:1]), out_fd, 'train0')
+    model.predict_imgs(m, (XY_train[0][30:31], XY_train[1][30:31]), out_fd, 'train30')
+
+    print('  Complete.')
 
 def parse_args():
     parser = argparse.ArgumentParser(
