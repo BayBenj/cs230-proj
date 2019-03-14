@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 import argparse
+import collections
+import math
 import os
 import re
-import math
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -57,13 +58,13 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Preprocess HDR images for data pipeline to neural network')
     parser.add_argument('--input-raw-dir', dest='input_raw_dir', type=str,
-        default='data/fchdr_raw_dataset')
+        default='/proj/data/fchdr_raw_dataset')
     parser.add_argument('--input-rend-dir', dest='input_rend_dir', type=str,
-        default='data/fchdr_rend_dataset')
+        default='/proj/data/fchdr_rend_dataset')
     parser.add_argument('--output-rgb-dir', dest='output_rgb_dir', type=str,
-        default='data/fchdr_rgb_dataset')
+        default='/proj/data/fchdr_rgb_dataset')
     parser.add_argument('--output-nn-dir', dest='output_nn_dir', type=str,
-        default='data/proc_nn_dataset')
+        default='/proj/data/proc_nn_dataset')
     parser.add_argument('--output-size', dest='output_size', type=str,
         default='224x224',
         help='Output image dimensions')
@@ -288,7 +289,7 @@ def gen_nn_dataset(rend_rgb=None):
     with tf.Session().as_default():
         samp_idx = 0
 
-        for rend_fp, rgb_fps in rend_rgb.items():
+        for rend_fp, rgb_fps in sorted(rend_rgb.items()):
             print('Processing: ' + rend_fp)
             print('  len(rgb_fps): ' + str(len(rgb_fps)))
             samp_idx_init = samp_idx
@@ -307,12 +308,12 @@ def gen_nn_dataset(rend_rgb=None):
 
                 # Write out x,y sample pairs
                 for i in range(len(rgb_rend_ops)):
-                    plt.imsave(
-                        os.path.join(x_filedir, 'x{}.jpg'.format(samp_idx)),
-                        rgb_rend_ops[i].eval())
-                    plt.imsave(
-                        os.path.join(y_filedir, 'y{}.jpg'.format(samp_idx)),
-                        rend_augm_ops[i].eval())
+                    x_fp = os.path.join(x_filedir, 'x{}.jpg'.format(samp_idx))
+                    y_fp = os.path.join(y_filedir, 'y{}.jpg'.format(samp_idx))
+                    if not(os.path.isfile(x_fp) and os.path.isfile(y_fp)) \
+                            or args.force:
+                        plt.imsave(x_fp, rgb_rend_ops[i].eval())
+                        plt.imsave(y_fp, rend_augm_ops[i].eval())
                     samp_idx += 1
 
             print('  added {} samples'.format(samp_idx-samp_idx_init))
