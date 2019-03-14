@@ -27,30 +27,6 @@ def main():
     # Map RGB exposures w/ scene HDR render
     rend_rgb = link_test_pairs(snslugs_rgb)
 
-    # Debugging, leave commented!
-    # rend_rgb = {
-    #     'data/fchdr_rend_dataset/507Rendered.jpg': [
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0001.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0002.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0003.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0004.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0005.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0006.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0007.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0008.png',
-    #         'data/fchdr_rgb_dataset-b/s1_507/s1_mdf0009.png']
-    #     'data/fchdr_rend_dataset/GeneralShermanRendered.jpg': [
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0065.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0066.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0067.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0068.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0069.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0070.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0071.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0072.png",
-    #         "data/fchdr_rgb_dataset-b/s032_general-sherman/s032_mdf0073.png"]
-    # }
-
     # Generate <LDR, HDR> samples dataset for NN
     gen_nn_dataset(rend_rgb)
 
@@ -278,6 +254,8 @@ def gen_nn_dataset(rend_rgb=None):
     x_filedir = os.path.join(args.output_nn_dir, 'x')
     y_filedir = os.path.join(args.output_nn_dir, 'y')
 
+    scene_exmp_fp = os.path.join(args.output_nn_dir, 'scene_exmp_map.txt')
+
     if not os.path.exists(x_filedir):
         os.makedirs(x_filedir)
     if not os.path.exists(y_filedir):
@@ -285,6 +263,8 @@ def gen_nn_dataset(rend_rgb=None):
 
     nn_dataset = []
     out_w, out_h = parse_dims(args.output_size)
+
+    scene_exmp_num = []
 
     with tf.Session().as_default():
         samp_idx = 0
@@ -316,9 +296,21 @@ def gen_nn_dataset(rend_rgb=None):
                         plt.imsave(y_fp, rend_augm_ops[i].eval())
                     samp_idx += 1
 
-            print('  added {} samples'.format(samp_idx-samp_idx_init))
+            # Log number of examples in scene
+            num_added = samp_idx - samp_idx_init
+            scene_exmp_num.append((rend_fp, num_added))
+
+            print('  added {} samples'.format(num_added))
 
     print('gen_nn_dataset: added {} training samples', samp_idx)
+
+    with open(scene_exmp_fp, 'w') as semp_file:
+        print('Processing: ' + scene_exmp_fp)
+
+        for (scene_fp, num_exmp) in scene_exmp_num:
+            semp_file.write('{},{}\n'.format(scene_fp, num_exmp))
+
+        print('  Complete.')
 
 if __name__ == '__main__':
     main()
