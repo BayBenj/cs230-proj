@@ -71,7 +71,7 @@ def parse_args():
     parser.add_argument('--val-split', dest='val_split', type=float,
                         default=0.8)
     parser.add_argument('--max-samples', dest='max_samples', type=int,
-                        default=1000)
+                        default=None)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
         default=5)
     parser.add_argument('--batch_size', dest='batch_size', type=int,

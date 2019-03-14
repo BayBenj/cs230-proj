@@ -77,7 +77,7 @@ def custom_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
 def psnr(yTrue, yPred):
-    return 10 * K.log(2 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
+    return 10 * K.log(4 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 
 def assemble():
     # Encoder (VGG16)
