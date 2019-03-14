@@ -105,22 +105,28 @@ def train(XY_train, XY_dev, epochs, batch_size):
 
     return model
 
-def predict_imgs(model, img, time):
-    out_img = model.predict(img[0:1])
+def predict_imgs(model, imgs, out_fd):
+    img_X, img_Y = imgs
+
+    out_img = model.predict(img_X[0:1])
     out_img = (out_img + 1) * 127.5
     print(out_img.shape)
-    pred_img = image.array_to_img(out_img[0])
-    inp_img = image.array_to_img((img[0] + 1) * 127.5)
-    pred_img.save('output/out_img_{}.jpg'.format(time))
-    inp_img.save('output/inp_img_{}.jpg'.format(time))
 
-def plot(time):
+    X_img = image.array_to_img((img_X[0] + 1) * 127.5)
+    Y_img = image.array_to_img((img_Y[0] + 1) * 127.5)
+    Yhat_img = image.array_to_img(out_img[0])
+
+    X_img.save(os.path.join(out_fd, 'x.jpg'))
+    Y_img.save(os.path.join(out_fd, 'y.jpg'))
+    Yhat_img.save(os.path.join(out_fd, 'yhat.jpg'))
+
+def plot(out_fd):
     plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
     plt.plot(range(0,len(history.history["val_psnr"])), history.history["val_psnr"])
     plt.legend(["train","dev"], loc='center left')
     plt.ylabel('PSNR')
     plt.xlabel('Epoch')
-    plt.savefig("output/psnr_{}.png".format(time), dpi=100)
+    plt.savefig(os.path.join(out_fd, 'psnr_chart.png'), dpi=100)
     plt.clf()
 
     plt.plot(range(0,len(history.history["loss"])), history.history["loss"])
@@ -128,6 +134,9 @@ def plot(time):
     plt.legend(["train","dev"], loc='center left')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
-    plt.savefig("output/loss_{}.png".format(time), dpi=100)
+    plt.savefig(os.path.join(out_fd, 'loss_chart.png'), dpi=100)
     plt.clf()
+
+def save(m, out_fd):
+    m.save(os.path.join(out_fd, 'model.h5'))
 

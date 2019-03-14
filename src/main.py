@@ -25,29 +25,38 @@ def timestamp():
     formatted = dt.strftime("%Y%m%d-%H%M%S")
     return formatted
 
-time = timestamp()
-
 def main():
     global args
 
     args = parse_args()
 
+    time = timestamp()
+
+    # Create and train model
     XY_train, XY_dev = load_trdev_datasets()
     m = model.train(XY_train, XY_dev, args.num_epochs, args.batch_size)
 
-    model.predict_imgs(m, XY_dev[0][0:1], time)
+    # Save outputs
+    out_fd = os.path.join(args.output_dir, 'model_{}'.format(time))
+    os.makedirs(out_fd)
 
-    model.plot(time)
+    if args.save_model:
+        model.save(m, out_fd)
+    model.predict_imgs(m, (XY_dev[0][0:1], XY_dev[1][0:1]), out_fd)
+    model.plot(out_fd)
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Script to train HDR inference model')
     parser.add_argument('--input-dir', dest='input_dir', type=str,
-                        default='/proj/data/proc_nn_dataset',
+                        default='/proj/data/split_nn_dataset',
                         help='Base path to training input images dataset')
-    parser.add_argument('--output-fn', dest='output_fn', type=str,
-                        default='hdr-infer-model.h5',
-                        help='Output model filename')
+    parser.add_argument('--output-dir', dest='output_dir', type=str,
+                        default='./model_out/',
+                        help='Output directory')
+    parser.add_argument('--save-model', dest='save_model', action='store_true',
+                        default=False,
+                        help='Save model weights in H5 file')
     parser.add_argument('--val-split', dest='val_split', type=float,
                         default=0.8)
     parser.add_argument('--max-samples', dest='max_samples', type=int,
