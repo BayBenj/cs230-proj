@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pprint as pp
 import matplotlib.pyplot as plt
+import time
 import datetime
 import pytz
 import math
@@ -25,7 +26,9 @@ def timestamp():
     formatted = dt.strftime("%Y%m%d-%H%M%S")
     return formatted
 
-time = timestamp()
+
+start_time = timestamp()
+
 
 def main():
     global args
@@ -33,11 +36,15 @@ def main():
     args = parse_args()
 
     XY_train, XY_dev = load_trdev_datasets()
+    
+    start = time.time()
     m = model.train(XY_train, XY_dev, args.num_epochs, args.batch_size)
+    end = time.time()
+    print("Training model took {} seconds.".format(end - start))
 
-    model.predict_imgs(m, XY_dev[0][0:1], time)
+    model.predict_imgs(m, XY_dev[0][0:1], start_time)
 
-    model.plot(time)
+    model.plot(start_time)
 
 def parse_args():
     parser = argparse.ArgumentParser(
