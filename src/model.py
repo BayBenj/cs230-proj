@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 import pprint as pp
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 import datetime
 import pytz
 
@@ -16,9 +16,8 @@ from keras.applications.vgg16 import preprocess_input
 from keras.callbacks import History
 import keras.backend as K
 
-
 CONV_FACTOR = np.log(10)
-history = History() 
+history = History()
 VGG_MEAN = [103.939, 116.779, 123.68]
 
 def ldr_encoder():
@@ -26,7 +25,7 @@ def ldr_encoder():
         include_top=False,
         weights='imagenet',
         input_shape=(224, 224, 3))
-    for layer in vgg16_input.layers[:17]:     
+    for layer in vgg16_input.layers[:17]:
         layer.trainable = False
     inp_img = vgg16_input.layers[0].input
     skip1 = vgg16_input.layers[2].output
@@ -40,45 +39,43 @@ def ldr_encoder():
     result = vgg16_input.layers[-2].output
     return inp_img, skip1, skip2, skip3, skip4, result, vgg16_input
 
-
 def decoder_layer(nn_in, n_filters, filter_size, stride, pad="same", act="linear"):
-    nn = Conv2DTranspose(n_filters, filter_size, strides=stride, padding=pad, activation=act)(nn_in)
+    nn = Conv2DTranspose(n_filters, filter_size,
+        strides=stride, padding=pad, activation=act)(nn_in)
     nn = BatchNormalization()(nn)
-    return nn
 
+    return nn
 
 def hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep):
     network = decoder_layer(latent_rep, 512, 3, 2)
-    
+
     network = Concatenate(axis = -1)([network, skip4])
     network = Conv2D(512, 1, activation='linear')(network)
     network = decoder_layer(network, 256, 3, 2)
-    
+
     network = Concatenate(axis = -1)([network, skip3])
     network = Conv2D(256, 1, activation='linear')(network)
     network = decoder_layer(network, 128, 3, 2)
-    
+
     network = Concatenate(axis = -1)([network, skip2])
     network = Conv2D(128, 1, activation='linear')(network)
     network = decoder_layer(network, 64, 3, 2)
-    
+
     network = Concatenate(axis = -1)([network, skip1])
     network = Conv2D(64, 1, activation='linear')(network)
     network = Conv2D(3, 1, activation='linear')(network)
-    
+
     network = Concatenate(axis = -1)([network, inp_img])
     result = Conv2D(3, 1, activation='linear')(network)
+
     #result = decoder_layer(network, 3, 1, 1, act='sigmoid')
     return result
-
 
 def custom_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
-
 def psnr(yTrue, yPred):
     return 10 * K.log(2 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
-
 
 def assemble():
     # Encoder (VGG16)
@@ -92,14 +89,21 @@ def assemble():
 
     return model
 
-
-def train(dataset, epochs, batch_size):     
+def train(XY_train, XY_dev, epochs, batch_size):
     model = assemble()
-    X, Y = dataset
-    model.summary()
-    model.fit(X, Y, batch_size, epochs, verbose=1, validation_split=0.2, shuffle=True, callbacks=[history])
-    return model
 
+    X_train, Y_train = XY_train
+    X_dev, Y_dev = XY_dev
+
+    model.summary()
+
+    model.fit(X_train, Y_train, batch_size, epochs,
+        validation_data=(X_dev, Y_dev),
+        verbose=1,
+        shuffle=True,
+        callbacks=[history])
+
+    return model
 
 def predict_imgs(model, img, time):
     out_img = model.predict(img[0:1])
@@ -109,7 +113,6 @@ def predict_imgs(model, img, time):
     inp_img = image.array_to_img((img[0] + 1) * 127.5)
     pred_img.save('output/out_img_{}.jpg'.format(time))
     inp_img.save('output/inp_img_{}.jpg'.format(time))
-
 
 def plot(time):
     plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])

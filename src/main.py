@@ -8,12 +8,12 @@ import pprint as pp
 import matplotlib.pyplot as plt
 import datetime
 import pytz
+import math
 
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
 
 import model
-
 
 def timestamp():
     def utc_to_local(utc_dt):
@@ -25,18 +25,19 @@ def timestamp():
     formatted = dt.strftime("%Y%m%d-%H%M%S")
     return formatted
 
-
 time = timestamp()
-
 
 def main():
     global args
-    args = parse_args()
-    x, y = load_datasets()
-    m = model.train((x, y), args.num_epochs, args.batch_size)
-    model.predict_imgs(m, x[0:1], time)
-    model.plot(time)
 
+    args = parse_args()
+
+    XY_train, XY_dev = load_trdev_datasets()
+    m = model.train(XY_train, XY_dev, args.num_epochs, args.batch_size)
+
+    model.predict_imgs(m, XY_dev[0][0:1], time)
+
+    model.plot(time)
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -47,6 +48,8 @@ def parse_args():
     parser.add_argument('--output-fn', dest='output_fn', type=str,
                         default='hdr-infer-model.h5',
                         help='Output model filename')
+    parser.add_argument('--val-split', dest='val_split', type=float,
+                        default=0.8)
     parser.add_argument('--max-samples', dest='max_samples', type=int,
                         default=1000)
     parser.add_argument('--epochs', dest='num_epochs', type=int,
@@ -54,17 +57,20 @@ def parse_args():
     parser.add_argument('--batch_size', dest='batch_size', type=int,
                         default=32)
 
-    return parser.parse_args()
+    args = parser.parse_args()
 
+    assert((args.val_split > 0.0) and (args.val_split <= 1.0))
 
-def load_datasets():
-    x_fd = os.path.join(args.input_dir, 'x')
-    y_fd = os.path.join(args.input_dir, 'y')
+    return args
+
+def load_dataset(dataset_fd, max_samples):
+    x_fd = os.path.join(dataset_fd, 'x')
+    y_fd = os.path.join(dataset_fd, 'y')
 
     x = []
     y = []
     for i, imgx_fn in enumerate(os.listdir(x_fd)):
-        if (args.max_samples is not None) and (i + 1 > args.max_samples):
+        if (max_samples is not None) and (i + 1 > max_samples):
             break
         imgx_fp = os.path.join(x_fd, imgx_fn)
         imgy_fn = 'y' + imgx_fn[1:]
@@ -105,6 +111,15 @@ def load_datasets():
 
     return x, y
 
+def load_trdev_datasets():
+    train_fd = os.path.join(args.input_dir, 'train')
+    dev_fd = os.path.join(args.input_dir, 'dev')
+
+    max_train_samples = args.val_split * args.max_samples
+    max_dev_samples = math.ceil((1.0 - args.val_split) * args.max_samples)
+
+    return load_dataset(train_fd, max_train_samples), \
+        load_dataset(dev_fd, max_dev_samples)
 
 if __name__ == '__main__':
     main()
