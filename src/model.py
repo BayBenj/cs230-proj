@@ -1,5 +1,6 @@
 import argparse
 import os
+from contextlib import redirect_stdout
 
 import numpy as np
 import pprint as pp
@@ -10,9 +11,11 @@ import pytz
 import tensorflow as tf
 from keras.preprocessing import image
 from keras.models import Model
-from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization, Concatenate
+from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, \
+    BatchNormalization, Dropout, Concatenate
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
+from keras.optimizers import Adam, SGD
 from keras.callbacks import History
 import keras.backend as K
 
@@ -20,78 +23,105 @@ CONV_FACTOR = np.log(10)
 history = History()
 VGG_MEAN = [103.939, 116.779, 123.68]
 
+
 def ldr_encoder():
-    vgg16_input = VGG16(
-        include_top=False,
-        weights='imagenet',
+    vgg16_enc = {}
+
+    vgg16 = VGG16(include_top=False, weights='imagenet',
         input_shape=(224, 224, 3))
-    for layer in vgg16_input.layers[:17]:
+
+    # for layer in vgg16.layers[:17]:
+    for layer in vgg16.layers[:15]:
         layer.trainable = False
-    inp_img = vgg16_input.layers[0].input
-    skip1 = vgg16_input.layers[2].output
-    skip2 = vgg16_input.layers[5].output
-    skip3 = vgg16_input.layers[9].output
-    skip4 = vgg16_input.layers[13].output
-    print(skip1.shape)
-    print(skip2.shape)
-    print(skip3.shape)
-    print(skip4.shape)
-    result = vgg16_input.layers[-2].output
-    return inp_img, skip1, skip2, skip3, skip4, result, vgg16_input
 
-def decoder_layer(nn_in, n_filters, filter_size, stride, pad="same", act="linear"):
-    nn = Conv2DTranspose(n_filters, filter_size,
-        strides=stride, padding=pad, activation=act)(nn_in)
-    nn = BatchNormalization()(nn)
+    vgg16_enc['img_inp'] = vgg16.input
+    vgg16_enc['inp'] = vgg16.layers[0].input
+    vgg16_enc['b1c2'] = vgg16.layers[2].output
+    vgg16_enc['b2c2'] = vgg16.layers[5].output
+    vgg16_enc['b3c3'] = vgg16.layers[9].output
+    vgg16_enc['b4c3'] = vgg16.layers[13].output
+    vgg16_enc['b5c3'] = vgg16.layers[17].output
 
-    return nn
+    return vgg16_enc
 
-def hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep):
-    network = decoder_layer(latent_rep, 512, 3, 2)
 
-    network = Concatenate(axis = -1)([network, skip4])
-    network = Conv2D(512, 1, activation='linear')(network)
-    network = decoder_layer(network, 256, 3, 2)
+def latent_layers(x, drpo_rate):
+    x = Conv2D(512, 1, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Conv2D(512, 1, activation='relu')(x)
+    x = BatchNormalization()(x)
 
-    network = Concatenate(axis = -1)([network, skip3])
-    network = Conv2D(256, 1, activation='linear')(network)
-    network = decoder_layer(network, 128, 3, 2)
+    return x
 
-    network = Concatenate(axis = -1)([network, skip2])
-    network = Conv2D(128, 1, activation='linear')(network)
-    network = decoder_layer(network, 64, 3, 2)
 
-    network = Concatenate(axis = -1)([network, skip1])
-    network = Conv2D(64, 1, activation='linear')(network)
-    network = Conv2D(3, 1, activation='linear')(network)
+def upscale_layer(x, n_filters, filter_size, stride, drpo_rate,
+        pad='same', acti='relu'):
+    x = Conv2DTranspose(n_filters, filter_size,
+        strides=stride, padding=pad, activation=acti)(x)
+    x = BatchNormalization()(x)
+    x = Dropout(drpo_rate)(x)
 
-    network = Concatenate(axis = -1)([network, inp_img])
-    result = Conv2D(3, 1, activation='linear')(network)
+    return x
 
-    #result = decoder_layer(network, 3, 1, 1, act='sigmoid')
-    return result
+
+def hdr_decoder(x, ldr_enc, drpo_rate):
+    x = upscale_layer(x, 512, 3, 2, drpo_rate)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['b4c3']])
+    x = Conv2D(512, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = upscale_layer(x, 256, 3, 2, drpo_rate)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['b3c3']])
+    x = Conv2D(256, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = upscale_layer(x, 128, 3, 2, drpo_rate)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['b2c2']])
+    x = Conv2D(128, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = upscale_layer(x, 64, 3, 2, drpo_rate)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['b1c2']])
+    x = Conv2D(64, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = Conv2D(3, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['inp']])
+    x = Conv2D(3, 1, activation='relu')(x)
+
+    return x
+
 
 def custom_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
-def psnr(yTrue, yPred):
-    return 10 * K.log(2 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 
-def assemble():
+def psnr(yTrue, yPred):
+    return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
+
+
+def assemble(drpo_rate):
     # Encoder (VGG16)
-    inp_img, skip1, skip2, skip3, skip4, latent_rep, vgg16_input = ldr_encoder()
+    ldr_enc = ldr_encoder()
+
+    # Latent repr. layers
+    x = latent_layers(ldr_enc['b5c3'], drpo_rate)
 
     # Decoder
-    x = hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep)
+    x = hdr_decoder(x, ldr_enc, drpo_rate)
 
-    model = Model(inputs=vgg16_input.input, outputs=x)
-    model.compile(optimizer='adam', loss=custom_loss, metrics=[psnr])
+    model = Model(inputs=ldr_enc['img_inp'], outputs=x)
+
+    optimi = Adam()
+
+    model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr])
 
     return model
 
-def train(XY_train, XY_dev, epochs, batch_size):
-    model = assemble()
 
+def train(model, XY_train, XY_dev, epochs, batch_size):
     X_train, Y_train = XY_train
     X_dev, Y_dev = XY_dev
 
@@ -103,24 +133,40 @@ def train(XY_train, XY_dev, epochs, batch_size):
         shuffle=True,
         callbacks=[history])
 
-    return model
 
-def predict_imgs(model, img, time):
-    out_img = model.predict(img[0:1])
-    out_img = (out_img + 1) * 127.5
+def load_weights(model, model_fp):
+    model.load_weights(model_fp)
+
+
+def write_summary(model, out_fd):
+    with open(os.path.join(out_fd, 'summary.txt'), 'w') as summ_file:
+        with redirect_stdout(summ_file):
+            model.summary()
+
+
+def predict_imgs(model, imgs, out_fd, fn_tag):
+    img_X, img_Y = imgs
+
+    out_img = model.predict(img_X[0:1])
+    out_img = out_img * 255.0
     print(out_img.shape)
-    pred_img = image.array_to_img(out_img[0])
-    inp_img = image.array_to_img((img[0] + 1) * 127.5)
-    pred_img.save('output/out_img_{}.jpg'.format(time))
-    inp_img.save('output/inp_img_{}.jpg'.format(time))
 
-def plot(time):
+    X_img = image.array_to_img(img_X[0] * 255.0)
+    Y_img = image.array_to_img(img_Y[0] * 255.0)
+    Yhat_img = image.array_to_img(out_img[0])
+
+    X_img.save(os.path.join(out_fd, '{}-x.jpg'.format(fn_tag)))
+    Y_img.save(os.path.join(out_fd, '{}-y.jpg'.format(fn_tag)))
+    Yhat_img.save(os.path.join(out_fd, '{}-yhat.jpg'.format(fn_tag)))
+
+
+def plot(out_fd):
     plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
     plt.plot(range(0,len(history.history["val_psnr"])), history.history["val_psnr"])
     plt.legend(["train","dev"], loc='center left')
     plt.ylabel('PSNR')
     plt.xlabel('Epoch')
-    plt.savefig("output/psnr_{}.png".format(time), dpi=100)
+    plt.savefig(os.path.join(out_fd, 'psnr_chart.png'), dpi=100)
     plt.clf()
 
     plt.plot(range(0,len(history.history["loss"])), history.history["loss"])
@@ -128,6 +174,9 @@ def plot(time):
     plt.legend(["train","dev"], loc='center left')
     plt.ylabel('Loss')
     plt.xlabel('Epoch')
-    plt.savefig("output/loss_{}.png".format(time), dpi=100)
+    plt.savefig(os.path.join(out_fd, 'loss_chart.png'), dpi=100)
     plt.clf()
 
+
+def save(m, out_fd):
+    m.save(os.path.join(out_fd, 'model.h5'))

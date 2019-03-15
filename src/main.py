@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pprint as pp
 import matplotlib.pyplot as plt
-import time
+import time as clock
 import datetime
 import pytz
 import math
@@ -27,48 +27,120 @@ def timestamp():
     return formatted
 
 
-start_time = timestamp()
-
-
 def main():
     global args
-
+    start_time = timestamp()
     args = parse_args()
+    args.func(args, start_time)
+
+
+def train_model(args, start_time):
+    m = model.assemble(args.drpo_rate)
 
     XY_train, XY_dev = load_trdev_datasets()
     
-    start = time.time()
-    m = model.train(XY_train, XY_dev, args.num_epochs, args.batch_size)
-    end = time.time()
+    start = clock.time()
+    model.train(m, XY_train, XY_dev, args.num_epochs, args.batch_size)
+    end = clock.time()
     print("Training model took {} seconds.".format(end - start))
 
-    model.predict_imgs(m, XY_dev[0][0:1], start_time)
+    # Save outputs
+    out_fd = os.path.join(args.output_dir, 'model_{}_epch{}_bs{}_trn{}_val{}' \
+        .format(start_time, args.num_epochs, args.batch_size,
+            len(XY_train[0]), len(XY_dev[0])))
+    os.makedirs(out_fd)
 
-    model.plot(start_time)
+    print('Processing: ' + out_fd)
+
+    model.write_summary(m, out_fd)
+    if args.save_model:
+        model.save(m, out_fd)
+    model.plot(out_fd)
+
+    # Predict a few samples
+    train_idx = [0, 60, 100, 400]
+    for i in train_idx:
+        model.predict_imgs(m, (XY_train[0][i:i+1], XY_train[1][i:i+1]),
+            out_fd, 'train' + str(i))
+
+    dev_idx = [0, 10, 20, 40]
+    for i in dev_idx:
+        model.predict_imgs(m, (XY_dev[0][i:i+1], XY_dev[1][i:i+1]),
+            out_fd, 'dev' + str(i))
+
+    print('  Complete.')
+
+
+def predict_model(args, start_time):
+    m = model.assemble()
+    m.load_weights(args.model_h5)
+
+    print('Processing: ' + args.input_dir)
+    print('  Note: If you see a TF exception w/ BaseSession.__del__, that is ' \
+        'a known and harmless bug')
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    for i, img_fn in enumerate(os.listdir(args.input_dir)):
+        img_fp = os.path.join(args.input_dir, img_fn)
+
+        img_out_fn = os.path.splitext(img_fn)[0] + '.jpg'
+        img_out_fp = os.path.join(args.output_dir, img_out_fn)
+
+        print('  output: ' + img_out_fn)
+
+        img_x = np.asarray(image.img_to_array(image.load_img(img_fp))) / 255.0
+
+        img_pred = m.predict(np.array([img_x])) * 255.0
+        img_out = image.array_to_img(img_pred[0])
+        img_out.save(img_out_fp)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Script to train HDR inference model')
-    parser.add_argument('--input-dir', dest='input_dir', type=str,
-                        default='/proj/data/proc_nn_dataset',
-                        help='Base path to training input images dataset')
-    parser.add_argument('--output-fn', dest='output_fn', type=str,
-                        default='hdr-infer-model.h5',
-                        help='Output model filename')
-    parser.add_argument('--val-split', dest='val_split', type=float,
-                        default=0.8)
-    parser.add_argument('--max-samples', dest='max_samples', type=int,
-                        default=1000)
-    parser.add_argument('--epochs', dest='num_epochs', type=int,
+
+    subparsers = parser.add_subparsers(help='Select model operation')
+    subparsers.dest = 'model_op'
+    subparsers.required = True
+
+    train_parser = subparsers.add_parser('train',
+        help='Train neural network model model')
+    train_parser.add_argument('--input-dir', dest='input_dir', type=str,
+        default='/proj/data/split_nn_dataset')
+    train_parser.add_argument('--output-dir', dest='output_dir', type=str,
+        default='./model_out/')
+    train_parser.add_argument('--save-model', dest='save_model', action='store_true',
+        default=False)
+    train_parser.add_argument('--val-split', dest='val_split', type=float,
+        default=0.8)
+    train_parser.add_argument('--max-samples', dest='max_samples', type=int,
+        default=1000)
+    train_parser.add_argument('--epochs', dest='num_epochs', type=int,
         default=5)
-    parser.add_argument('--batch_size', dest='batch_size', type=int,
-                        default=32)
+    train_parser.add_argument('--batch_size', dest='batch_size', type=int,
+        default=32)
+    train_parser.add_argument('--dropout-rate', dest='drpo_rate', type=float,
+        default=0.0)
+    train_parser.set_defaults(func=train_model)
+
+    predict_parser = subparsers.add_parser('predict',
+        help='Predict HDR image using neural network model model')
+    predict_parser.add_argument('--input-dir', dest='input_dir', type=str,
+        default='./pred-in-imgs')
+    predict_parser.add_argument('--output-dir', dest='output_dir', type=str,
+        default='./pred-out-imgs')
+    predict_parser.add_argument('model_h5', type=str,
+        default='model.h5')
+    predict_parser.set_defaults(func=predict_model)
 
     args = parser.parse_args()
 
-    assert((args.val_split > 0.0) and (args.val_split <= 1.0))
+    if args.model_op == 'train':
+        assert((args.val_split > 0.0) and (args.val_split <= 1.0))
 
     return args
+
 
 def load_dataset(dataset_fd, max_samples):
     x_fd = os.path.join(dataset_fd, 'x')
@@ -100,10 +172,9 @@ def load_dataset(dataset_fd, max_samples):
             x.append(image.img_to_array(image.load_img(imgx_fp)))
             y.append(image.img_to_array(image.load_img(imgy_fp)))
 
-    x = (np.asarray(x) / 127.5) - 1
-    #x = np.asarray(x) / 255
+    x = np.asarray(x) / 255.0
     print(x.shape)
-    y = (np.asarray(y) / 127.5) - 1
+    y = np.asarray(y) / 255.0
     print(y.shape)
 
     # Normalize input images
@@ -118,6 +189,7 @@ def load_dataset(dataset_fd, max_samples):
 
     return x, y
 
+
 def load_trdev_datasets():
     train_fd = os.path.join(args.input_dir, 'train')
     dev_fd = os.path.join(args.input_dir, 'dev')
@@ -127,6 +199,7 @@ def load_trdev_datasets():
 
     return load_dataset(train_fd, max_train_samples), \
         load_dataset(dev_fd, max_dev_samples)
+
 
 if __name__ == '__main__':
     main()
