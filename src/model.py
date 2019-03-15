@@ -11,7 +11,8 @@ import pytz
 import tensorflow as tf
 from keras.preprocessing import image
 from keras.models import Model
-from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, BatchNormalization, Concatenate
+from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, \
+    BatchNormalization, Dropout, Concatenate
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 from keras.optimizers import Adam, SGD
@@ -23,70 +24,88 @@ history = History()
 VGG_MEAN = [103.939, 116.779, 123.68]
 
 def ldr_encoder():
-    vgg16_input = VGG16(
-        include_top=False,
-        weights='imagenet',
+    vgg16_enc = {}
+
+    vgg16 = VGG16(include_top=False, weights='imagenet',
         input_shape=(224, 224, 3))
-    for layer in vgg16_input.layers[:17]:
+
+    # for layer in vgg16.layers[:17]:
+    for layer in vgg16.layers[:15]:
         layer.trainable = False
-    inp_img = vgg16_input.layers[0].input
-    skip1 = vgg16_input.layers[2].output
-    skip2 = vgg16_input.layers[5].output
-    skip3 = vgg16_input.layers[9].output
-    skip4 = vgg16_input.layers[13].output
-    print(skip1.shape)
-    print(skip2.shape)
-    print(skip3.shape)
-    print(skip4.shape)
-    result = vgg16_input.layers[-2].output
-    return inp_img, skip1, skip2, skip3, skip4, result, vgg16_input
 
-def decoder_layer(nn_in, n_filters, filter_size, stride, pad='same',
-        acti='relu'):
-    nn = Conv2DTranspose(n_filters, filter_size,
-        strides=stride, padding=pad, activation=acti)(nn_in)
-    nn = BatchNormalization()(nn)
+    vgg16_enc['img_inp'] = vgg16.input
+    vgg16_enc['inp'] = vgg16.layers[0].input
+    vgg16_enc['b1c2'] = vgg16.layers[2].output
+    vgg16_enc['b2c2'] = vgg16.layers[5].output
+    vgg16_enc['b3c3'] = vgg16.layers[9].output
+    vgg16_enc['b4c3'] = vgg16.layers[13].output
+    vgg16_enc['b5c3'] = vgg16.layers[17].output
 
-    return nn
+    return vgg16_enc
 
-def hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep):
-    network = decoder_layer(latent_rep, 512, 3, 2)
+def latent_layers(x, drpo_rate):
+    x = Conv2D(512, 1, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Conv2D(512, 1, activation='relu')(x)
+    x = BatchNormalization()(x)
 
-    network = Concatenate(axis = -1)([network, skip4])
-    network = Conv2D(512, 1, activation='relu')(network)
-    network = decoder_layer(network, 256, 3, 2)
+    return x
 
-    network = Concatenate(axis = -1)([network, skip3])
-    network = Conv2D(256, 1, activation='relu')(network)
-    network = decoder_layer(network, 128, 3, 2)
+def upscale_layer(x, n_filters, filter_size, stride, drpo_rate,
+        pad='same', acti='relu'):
+    x = Conv2DTranspose(n_filters, filter_size,
+        strides=stride, padding=pad, activation=acti)(x)
+    x = BatchNormalization()(x)
+    x = Dropout(drpo_rate)(x)
 
-    network = Concatenate(axis = -1)([network, skip2])
-    network = Conv2D(128, 1, activation='relu')(network)
-    network = decoder_layer(network, 64, 3, 2)
+    return x
 
-    network = Concatenate(axis = -1)([network, skip1])
-    network = Conv2D(64, 1, activation='relu')(network)
-    network = Conv2D(3, 1, activation='relu')(network)
+def hdr_decoder(x, ldr_enc, drpo_rate):
+    x = upscale_layer(x, 512, 3, 2, drpo_rate)
 
-    network = Concatenate(axis = -1)([network, inp_img])
-    result = Conv2D(3, 1, activation='relu')(network)
+    x = Concatenate(axis = -1)([x, ldr_enc['b4c3']])
+    x = Conv2D(512, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = upscale_layer(x, 256, 3, 2, drpo_rate)
 
-    return result
+    x = Concatenate(axis = -1)([x, ldr_enc['b3c3']])
+    x = Conv2D(256, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = upscale_layer(x, 128, 3, 2, drpo_rate)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['b2c2']])
+    x = Conv2D(128, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = upscale_layer(x, 64, 3, 2, drpo_rate)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['b1c2']])
+    x = Conv2D(64, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+    x = Conv2D(3, 1, activation='relu')(x)
+    x = Dropout(drpo_rate)(x)
+
+    x = Concatenate(axis = -1)([x, ldr_enc['inp']])
+    x = Conv2D(3, 1, activation='relu')(x)
+
+    return x
 
 def custom_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
 def psnr(yTrue, yPred):
-    return 10 * K.log(4 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
+    return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 
-def assemble():
+def assemble(drpo_rate):
     # Encoder (VGG16)
-    inp_img, skip1, skip2, skip3, skip4, latent_rep, vgg16_input = ldr_encoder()
+    ldr_enc = ldr_encoder()
+
+    # Latent repr. layers
+    x = latent_layers(ldr_enc['b5c3'], drpo_rate)
 
     # Decoder
-    x = hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep)
+    x = hdr_decoder(x, ldr_enc, drpo_rate)
 
-    model = Model(inputs=vgg16_input.input, outputs=x)
+    model = Model(inputs=ldr_enc['img_inp'], outputs=x)
 
     optimi = Adam()
 

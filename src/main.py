@@ -34,7 +34,7 @@ def main():
     args.func(args, time)
 
 def train_model(args, time):
-    m = model.assemble()
+    m = model.assemble(args.drpo_rate)
 
     XY_train, XY_dev = load_trdev_datasets()
     model.train(m, XY_train, XY_dev, args.num_epochs, args.batch_size)
@@ -113,6 +113,8 @@ def parse_args():
         default=5)
     train_parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
+    train_parser.add_argument('--dropout-rate', dest='drpo_rate', type=float,
+        default=0.0)
     train_parser.set_defaults(func=train_model)
 
     predict_parser = subparsers.add_parser('predict',
