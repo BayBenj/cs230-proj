@@ -41,9 +41,10 @@ def ldr_encoder():
     result = vgg16_input.layers[-2].output
     return inp_img, skip1, skip2, skip3, skip4, result, vgg16_input
 
-def decoder_layer(nn_in, n_filters, filter_size, stride, pad="same", act="linear"):
+def decoder_layer(nn_in, n_filters, filter_size, stride, pad='same',
+        acti='relu'):
     nn = Conv2DTranspose(n_filters, filter_size,
-        strides=stride, padding=pad, activation=act)(nn_in)
+        strides=stride, padding=pad, activation=acti)(nn_in)
     nn = BatchNormalization()(nn)
 
     return nn
@@ -52,25 +53,24 @@ def hdr_decoder(inp_img, skip1, skip2, skip3, skip4, latent_rep):
     network = decoder_layer(latent_rep, 512, 3, 2)
 
     network = Concatenate(axis = -1)([network, skip4])
-    network = Conv2D(512, 1, activation='linear')(network)
+    network = Conv2D(512, 1, activation='relu')(network)
     network = decoder_layer(network, 256, 3, 2)
 
     network = Concatenate(axis = -1)([network, skip3])
-    network = Conv2D(256, 1, activation='linear')(network)
+    network = Conv2D(256, 1, activation='relu')(network)
     network = decoder_layer(network, 128, 3, 2)
 
     network = Concatenate(axis = -1)([network, skip2])
-    network = Conv2D(128, 1, activation='linear')(network)
+    network = Conv2D(128, 1, activation='relu')(network)
     network = decoder_layer(network, 64, 3, 2)
 
     network = Concatenate(axis = -1)([network, skip1])
-    network = Conv2D(64, 1, activation='linear')(network)
-    network = Conv2D(3, 1, activation='linear')(network)
+    network = Conv2D(64, 1, activation='relu')(network)
+    network = Conv2D(3, 1, activation='relu')(network)
 
     network = Concatenate(axis = -1)([network, inp_img])
-    result = Conv2D(3, 1, activation='linear')(network)
+    result = Conv2D(3, 1, activation='relu')(network)
 
-    #result = decoder_layer(network, 3, 1, 1, act='sigmoid')
     return result
 
 def custom_loss(yTrue, yPred):
@@ -88,18 +88,13 @@ def assemble():
 
     model = Model(inputs=vgg16_input.input, outputs=x)
 
-    # model.compile(optimizer='adam', loss=custom_loss, metrics=[psnr])
     optimi = Adam()
 
     model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr])
 
     return model
 
-
-
-def train(XY_train, XY_dev, epochs, batch_size):
-    model = assemble()
-
+def train(model, XY_train, XY_dev, epochs, batch_size):
     X_train, Y_train = XY_train
     X_dev, Y_dev = XY_dev
 
@@ -111,7 +106,8 @@ def train(XY_train, XY_dev, epochs, batch_size):
         shuffle=True,
         callbacks=[history])
 
-    return model
+def load_weights(model, model_fp):
+    model.load_weights(model_fp)
 
 def write_summary(model, out_fd):
     with open(os.path.join(out_fd, 'summary.txt'), 'w') as summ_file:
@@ -122,16 +118,16 @@ def predict_imgs(model, imgs, out_fd, fn_tag):
     img_X, img_Y = imgs
 
     out_img = model.predict(img_X[0:1])
-    out_img = (out_img + 1) * 127.5
+    out_img = out_img * 255.0
     print(out_img.shape)
 
-    X_img = image.array_to_img((img_X[0] + 1) * 127.5)
-    Y_img = image.array_to_img((img_Y[0] + 1) * 127.5)
+    X_img = image.array_to_img(img_X[0] * 255.0)
+    Y_img = image.array_to_img(img_Y[0] * 255.0)
     Yhat_img = image.array_to_img(out_img[0])
 
-    X_img.save(os.path.join(out_fd, 'x-{}.jpg'.format(fn_tag)))
-    Y_img.save(os.path.join(out_fd, 'y-{}.jpg'.format(fn_tag)))
-    Yhat_img.save(os.path.join(out_fd, 'yhat-{}.jpg'.format(fn_tag)))
+    X_img.save(os.path.join(out_fd, '{}-x.jpg'.format(fn_tag)))
+    Y_img.save(os.path.join(out_fd, '{}-y.jpg'.format(fn_tag)))
+    Yhat_img.save(os.path.join(out_fd, '{}-yhat.jpg'.format(fn_tag)))
 
 def plot(out_fd):
     plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
@@ -152,4 +148,3 @@ def plot(out_fd):
 
 def save(m, out_fd):
     m.save(os.path.join(out_fd, 'model.h5'))
-
