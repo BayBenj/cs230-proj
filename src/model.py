@@ -94,8 +94,26 @@ def hdr_decoder(x, ldr_enc, drpo_rate):
     return x
 
 
-def custom_loss(yTrue, yPred):
+def total_variation_loss(yPred):
+    img_nrows = 224
+    img_ncols = 224
+    assert K.ndim(yPred) == 4
+    if K.image_data_format() == 'channels_first':
+        a = K.square(yPred[:, :, :img_nrows - 1, :img_ncols - 1] - yPred[:, :, 1:, :img_ncols - 1])
+        b = K.square(yPred[:, :, :img_nrows - 1, :img_ncols - 1] - yPred[:, :, :img_nrows - 1, 1:])
+    else:
+        a = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, 1:, :img_ncols - 1, :])
+        b = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, :img_nrows - 1, 1:, :])
+    return K.mean(K.pow(a + b, 1.25))
+
+def l2_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
+
+def l1_loss(yTrue, yPred):
+    return K.mean(K.square(yTrue - yPred))
+
+def custom_loss(yTrue, yPred):
+    return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
 
 
 def psnr(yTrue, yPred):
