@@ -14,7 +14,8 @@ import math
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
 
-import model_upsample as model
+# import model_upsample as model
+import model as model
 
 def timestamp():
     def utc_to_local(utc_dt):
@@ -26,16 +27,14 @@ def timestamp():
     formatted = dt.strftime("%Y%m%d-%H%M%S")
     return formatted
 
-
 def main():
     global args
     start_time = timestamp()
     args = parse_args()
     args.func(args, start_time)
 
-
 def train_model(args, start_time):
-    m = model.assemble(args.drpo_rate)
+    m = model.assemble(args.drpo_rate, args.enable_bn)
 
     XY_train, XY_dev = load_trdev_datasets()
     
@@ -107,11 +106,11 @@ def parse_args():
     train_parser = subparsers.add_parser('train',
         help='Train neural network model model')
     train_parser.add_argument('--input-dir', dest='input_dir', type=str,
-        default='/proj/data/split_nn_dataset_aligned-samp')
+        default='/proj/data/split_nn_dataset_aligned')
     train_parser.add_argument('--output-dir', dest='output_dir', type=str,
         default='./model_out/')
-    train_parser.add_argument('--save-model', dest='save_model', action='store_true',
-        default=False)
+    train_parser.add_argument('--save-model', dest='save_model',
+        action='store_true', default=False)
     train_parser.add_argument('--val-split', dest='val_split', type=float,
         default=0.8)
     train_parser.add_argument('--max-samples', dest='max_samples', type=int,
@@ -121,7 +120,9 @@ def parse_args():
     train_parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
     train_parser.add_argument('--dropout-rate', dest='drpo_rate', type=float,
-        default=0.0)
+        default=None)
+    train_parser.add_argument('--enable-bn', dest='enable_bn',
+        action='store_true', default=False)
     train_parser.set_defaults(func=train_model)
 
     predict_parser = subparsers.add_parser('predict',
