@@ -48,11 +48,11 @@ def ldr_encoder():
 def latent_layers(x, drpo_rate):
     #x = Conv2D(512, 1, activation='relu')(x)
     x = Conv2D(512, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
     #x = BatchNormalization()(x)
     #x = Conv2D(512, 1, activation='relu')(x)
     x = Conv2D(512, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
     #x = BatchNormalization()(x)
 
     return x
@@ -63,7 +63,7 @@ def upscale_layer(x, n_filters, filter_size, stride, drpo_rate,
     x = UpSampling2D(size=(2, 2), interpolation='bilinear')(x)
     x = Conv2D(n_filters, filter_size,
         strides=1, padding=pad)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
     #x = BatchNormalization()(x)
     x = Dropout(drpo_rate)(x)
 
@@ -76,33 +76,33 @@ def hdr_decoder(x, ldr_enc, drpo_rate):
     x = Concatenate(axis = -1)([x, ldr_enc['b4c3']])
     #x = Conv2D(512, 1, activation='relu')(x)
     x = Conv2D(512, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
     x = Dropout(drpo_rate)(x)
     x = upscale_layer(x, 256, 3, 2, drpo_rate)
 
     x = Concatenate(axis = -1)([x, ldr_enc['b3c3']])
     #x = Conv2D(256, 1, activation='relu')(x)
     x = Conv2D(256, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
     x = Dropout(drpo_rate)(x)
     x = upscale_layer(x, 128, 3, 2, drpo_rate)
 
     x = Concatenate(axis = -1)([x, ldr_enc['b2c2']])
     #x = Conv2D(128, 1, activation='relu')(x)
     x = Conv2D(128, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
     x = Dropout(drpo_rate)(x)
     x = upscale_layer(x, 64, 3, 2, drpo_rate)
 
     x = Concatenate(axis = -1)([x, ldr_enc['b1c2']])
     #x = Conv2D(64, 1, activation='relu')(x)
     x = Conv2D(64, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
-    x = Dropout(drpo_rate)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
+    #x = Dropout(drpo_rate)(x)
     #x = Conv2D(3, 1, activation='relu')(x)
     x = Conv2D(3, 1)(x)
-    x = LeakyReLU(alpha = 0.2)(x)
-    x = Dropout(drpo_rate)(x)
+    x = LeakyReLU(alpha = 0.3)(x)
+    #x = Dropout(drpo_rate)(x)
 
     x = Concatenate(axis = -1)([x, ldr_enc['inp']])
     x = Conv2D(3, 1, activation='sigmoid')(x)
@@ -121,7 +121,7 @@ def total_variation_loss(yPred):
     else:
         a = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, 1:, :img_ncols - 1, :])
         b = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, :img_nrows - 1, 1:, :])
-    return K.mean(K.pow(a + b, 0.5))
+    return K.mean(K.pow(a + b, 1.25))
 
 def l2_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
@@ -130,7 +130,8 @@ def l1_loss(yTrue, yPred):
     return K.mean(K.abs(yTrue - yPred))
 
 def custom_loss(yTrue, yPred):
-    return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
+    #return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
+    return l1_loss(yTrue, yPred)
 
 def psnr(yTrue, yPred):
     return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR

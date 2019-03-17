@@ -107,7 +107,7 @@ def parse_args():
     train_parser = subparsers.add_parser('train',
         help='Train neural network model model')
     train_parser.add_argument('--input-dir', dest='input_dir', type=str,
-        default='/proj/data/split_nn_dataset_aligned-samp')
+        default='/proj/data/split_nn_dataset_aligned')
     train_parser.add_argument('--output-dir', dest='output_dir', type=str,
         default='./model_out/')
     train_parser.add_argument('--save-model', dest='save_model', action='store_true',
