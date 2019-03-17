@@ -93,9 +93,9 @@ def split_datasets():
             eis_idx, eie_idx = scene_exmp_rng[scene_exmp_num[sn_idx][0]]
             for ei in range(eis_idx, eie_idx):
                 exmp_x_ofp = os.path.join(args.input_nn_dir, 'x',
-                    'x{}.{}'.format(ei, args.input_fm))
+                    '{:06d}-x.{}'.format(ei, args.input_fm))
                 exmp_y_ofp = os.path.join(args.input_nn_dir, 'y',
-                    'y{}.{}'.format(ei, args.input_fm))
+                    '{:06d}-y.{}'.format(ei, args.input_fm))
                 shutil.copy(exmp_x_ofp, scene_x_dir)
                 shutil.copy(exmp_y_ofp, scene_y_dir)
 
