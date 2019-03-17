@@ -21,15 +21,9 @@ def parse_args():
     parser.add_argument('--input-rgb-dir', dest='input_rgb_dir', type=str,
         default='/proj/data/fchdr_rgb_dataset')
     parser.add_argument('--input-rend-dir', dest='input_rend_dir', type=str,
-        default='/proj/data//proj/data/fchdr_rend_dataset')
+        default='/proj/data/proj/data/fchdr_rend_dataset')
     parser.add_argument('--output-rgb-algnd-dir', dest='output_rgb_algnd_dir', type=str,
         default='/proj/data/fchdr_rgb-algned_dataset')
-    # parser.add_argument('--output-size', dest='output_size', type=str,
-    #     default='224x224',
-    #     help='Output image dimensions')
-    # parser.add_argument('--output-format', dest='output_fm', type=str,
-    #     choices=['png', 'jpeg'], default='png',
-    #     help='Output image RGB format')
     parser.add_argument('--force', dest='force', action='store_true',
         default=False,
         help='Force overwrite existing output files')
@@ -37,7 +31,7 @@ def parse_args():
     return parser.parse_args()
 
 def parse_scene_rgb():
-    with open('rend_rgb.txt', 'r') as rrgb_file:
+    with open('scene-rend-rgb-map.txt', 'r') as rrgb_file:
         return json.load(rrgb_file)
 
 def align_scene_images():
@@ -63,9 +57,9 @@ def align_scene_images():
     # Define termination criteria
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
 
-    for i, scene in enumerate(scenes_obj):
-        if i > 1: break
+    converge_error_files = []
 
+    for i, scene in enumerate(scenes_obj):
         algnd_fd = os.path.join(args.output_rgb_algnd_dir, scene['ldr_fd'])
         os.makedirs(algnd_fd, exist_ok=True)
 
@@ -74,24 +68,33 @@ def align_scene_images():
 
         rend_img = cv2.imread(scene['rend_fp'])
 
+        # rend_w = rend_img.shape[]
+        # rend_h = rend_img.shape[]
+        # size_req = (rend_img.shape[1], rend_img.shape[0])
+        sz = rend_img.shape
+
         for ldr_fp in scene['ldr_fps']:
             rgb_algnd_fp = os.path.join(algnd_fd, ldr_fp.split('/')[-1])
+            if os.path.isfile(rgb_algnd_fp):
+                continue
             print('  ldr_fp[{}]: {}'.format(i, rgb_algnd_fp))
 
             rgb_img = cv2.imread(ldr_fp)
-
-            # rend_w = rend_img.shape[]
-            # rend_h = rend_img.shape[]
-            # size_req = (rend_img.shape[1], rend_img.shape[0])
-            sz = rend_img.shape
-
             rgb_img = cv2.resize(rgb_img, dsize=(sz[1], sz[0]), interpolation=cv2.INTER_CUBIC)
 
             rend_gimg = cv2.cvtColor(rend_img, cv2.COLOR_RGB2GRAY)
             rgb_gimg = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2GRAY)
 
-            cc, warp_matrix = cv2.findTransformECC(rend_gimg, rgb_gimg, warp_matrix, warp_mode, criteria)
-            print(warp_matrix)
+            try:
+                cc, warp_matrix = cv2.findTransformECC(rend_gimg, rgb_gimg, warp_matrix, warp_mode, criteria)
+                print(warp_matrix)
+            except:
+                print('    findTransformECC error:' + rgb_algnd_fp)
+                print('      input: ' + ldr_fp)
+                print('      target: ' + rgb_algnd_fp)
+                print('      Skipping.')
+                converge_error_files.append(rgb_algnd_fp)
+                continue
 
             if warp_mode == cv2.MOTION_HOMOGRAPHY :
                 # Use warpPerspective for Homography
@@ -104,6 +107,13 @@ def align_scene_images():
 
 
             cv2.imwrite(rgb_algnd_fp, rgb_algnd_img)
+            
+    if len(converge_error_files) > 0:
+        print('The following files failed to converge or otherwise errored:')
+        for rgb_fp in converge_error_files:
+            print('  ' + rgb_fp)
+            
+    print('Complete.')
 
 if __name__ == '__main__':
     main()

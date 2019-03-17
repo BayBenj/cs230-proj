@@ -121,13 +121,13 @@ def total_variation_loss(yPred):
     else:
         a = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, 1:, :img_ncols - 1, :])
         b = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, :img_nrows - 1, 1:, :])
-    return K.mean(K.pow(a + b, 1.25))
+    return K.mean(K.pow(a + b, 0.5))
 
 def l2_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
 def l1_loss(yTrue, yPred):
-    return K.mean(K.square(yTrue - yPred))
+    return K.mean(K.abs(yTrue - yPred))
 
 def custom_loss(yTrue, yPred):
     return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
@@ -150,7 +150,7 @@ def assemble(drpo_rate):
 
     optimi = Adam()
 
-    model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr])
+    model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr, l1_loss, l2_loss])
 
     return model
 
