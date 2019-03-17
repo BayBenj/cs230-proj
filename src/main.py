@@ -14,7 +14,7 @@ import math
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
 
-import model
+import model_upsample as model
 
 def timestamp():
     def utc_to_local(utc_dt):
@@ -107,7 +107,7 @@ def parse_args():
     train_parser = subparsers.add_parser('train',
         help='Train neural network model model')
     train_parser.add_argument('--input-dir', dest='input_dir', type=str,
-        default='/proj/data/split_nn_dataset')
+        default='/proj/data/split_nn_dataset_aligned-samp')
     train_parser.add_argument('--output-dir', dest='output_dir', type=str,
         default='./model_out/')
     train_parser.add_argument('--save-model', dest='save_model', action='store_true',
@@ -152,7 +152,7 @@ def load_dataset(dataset_fd, max_samples):
         if (max_samples is not None) and (i + 1 > max_samples):
             break
         imgx_fp = os.path.join(x_fd, imgx_fn)
-        imgy_fn = 'y' + imgx_fn[1:]
+        imgy_fn = imgx_fn[:-5] + 'y.jpg'
         imgy_fp = os.path.join(y_fd, imgy_fn)
         if os.path.isfile(imgx_fp):
             assert(os.path.isfile(imgy_fp))

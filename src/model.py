@@ -110,7 +110,7 @@ def l2_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
 
 def l1_loss(yTrue, yPred):
-    return K.mean(K.square(yTrue - yPred))
+    return K.mean(K.abs(yTrue - yPred))
 
 def custom_loss(yTrue, yPred):
     return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
