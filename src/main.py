@@ -13,6 +13,7 @@ import math
 
 from keras.preprocessing import image
 from keras.applications.vgg16 import preprocess_input
+from keras.utils import plot_model
 
 import model
 
@@ -36,6 +37,7 @@ def main():
 
 def train_model(args, start_time):
     m = model.assemble(args.drpo_rate)
+    plot_model(m, to_file='model.png')
 
     XY_train, XY_dev = load_trdev_datasets()
     
