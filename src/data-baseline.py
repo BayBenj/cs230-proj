@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('--input-rend-dir', dest='input_rend_dir', type=str,
         default='/proj/data/fchdr_rend_dataset')
     parser.add_argument('--output-scene-bl-psnr', dest='output_scene_bl_psnr',
-        type=str, default='scene-bl-psnr.txt')
+        type=str, default='scene-baseline-psnr.txt')
     parser.add_argument('--force', dest='force', action='store_true',
         default=False,
         help='Force overwrite existing output files')
@@ -119,28 +119,29 @@ def calc_split_psnr(scenes_psnr):
             split_str = 'split[{}] {} ({} items)'.format(i, split_name,
                 len(rend_fns))
             print(split_str)
-            psnr_res_file.write(split_str)
+            psnr_res_file.write(split_str + '\n')
 
-            scene_psnr_avg = 0.0
+            split_psnr_avg = 0.0
             for rend_fn in rend_fns:
                 scene_psnr = scenes_psnr[rend_fn]
-                scene_psnr_avg += scene_psnr
+                split_psnr_avg += scene_psnr
                 scene_str = '  {:6.4f}: {}'.format(scene_psnr, rend_fn)
                 print(scene_str)
-                psnr_res_file.write(scene_str)
-            scene_psnr_avg /= len(rend_fns)
+                psnr_res_file.write(scene_str + '\n')
+            split_psnr_avg /= len(rend_fns)
 
-            scene_psnr_stddev = 0.0
+            split_psnr_stddev = 0.0
             for rend_fn in rend_fns:
-                scene_psnr_stddev += math.pow((scenes_psnr[rend_fn] - \
-                    scene_psnr_avg), 2)
-            scene_psnr_stddev /= len(rend_fns)
-            scene_psnr_stddev = math.sqrt(scene_psnr_stddev)
+                split_psnr_stddev += math.pow((scenes_psnr[rend_fn] - \
+                    split_psnr_avg), 2)
+            split_psnr_stddev /= len(rend_fns)
+            split_psnr_stddev = math.sqrt(split_psnr_stddev)
 
-            avg_str = '  scene psnr avg.: {}'.format(scene_psnr_avg)
-            stddev_str = '  scene psnr std. dev.: {}'.format(scene_psnr_stddev)
-            print('{}\n{}'.format(avg_str, stddev_str))
-            psnr_res_file.write('{}\n{}'.format(avg_str, stddev_str))
+            avg_str = '  split psnr avg.: {}'.format(split_psnr_avg)
+            stddev_str = '  split psnr std. dev.: {}'.format(split_psnr_stddev)
+            split_avg_stddev_str = '{}\n{}'.format(avg_str, stddev_str)
+            print(split_avg_stddev_str)
+            psnr_res_file.write(split_avg_stddev_str + '\n')
 
 if __name__ == '__main__':
     main()
