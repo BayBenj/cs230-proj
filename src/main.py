@@ -41,21 +41,24 @@ def train_model(args, start_time):
     XY_train, XY_dev = load_trdev_datasets()
     
     start = clock.time()
-    model.train(m, XY_train, XY_dev, args.num_epochs, args.batch_size)
-    end = clock.time()
-    print("Training model took {} seconds.".format(end - start))
 
-    # Save outputs
     out_fd = os.path.join(args.output_dir, 'model_{}_epch{}_bs{}_trn{}_val{}' \
         .format(start_time, args.num_epochs, args.batch_size,
             len(XY_train[0]), len(XY_dev[0])))
     os.makedirs(out_fd)
 
+    es_fp = os.path.join(out_fd, 'model-es.h5') if args.save_model else None
+
+    model.train(m, XY_train, XY_dev, args.num_epochs, args.batch_size, es_fp)
+    end = clock.time()
+    print("Training model took {} seconds.".format(end - start))
+
+    # Save outputs
     print('Processing: ' + out_fd)
 
     model.write_summary(m, out_fd)
     if args.save_model:
-        model.save(m, out_fd)
+        model.save_final(m, out_fd)
     model.plot(out_fd)
 
     # Predict a few samples
@@ -116,12 +119,12 @@ def parse_args():
     train_parser.add_argument('--val-split', dest='val_split', type=float,
         default=0.8)
     train_parser.add_argument('--max-samples', dest='max_samples', type=int,
-        default=1000)
+        default=None)
     train_parser.add_argument('--epochs', dest='num_epochs', type=int,
         default=5)
     train_parser.add_argument('--batch_size', dest='batch_size', type=int,
         default=32)
-    train_parser.add_argument('--dropout-rate', dest='drpo_rate', type=float,
+    train_parser.add_argument('--drpo-rate', dest='drpo_rate', type=float,
         default=None)
     train_parser.add_argument('--enable-bn', dest='enable_bn',
         action='store_true', default=False)
@@ -192,17 +195,19 @@ def load_dataset(dataset_fd, max_samples):
 
     return x, y
 
-
 def load_trdev_datasets():
     train_fd = os.path.join(args.input_dir, 'train')
     dev_fd = os.path.join(args.input_dir, 'dev')
 
-    max_train_samples = args.val_split * args.max_samples
-    max_dev_samples = math.ceil((1.0 - args.val_split) * args.max_samples)
+    if args.max_samples is not None:
+        max_train_samples = args.val_split * args.max_samples
+        max_dev_samples = math.ceil((1.0 - args.val_split) * args.max_samples)
+    else:
+        max_train_samples = None
+        max_dev_samples = None
 
     return load_dataset(train_fd, max_train_samples), \
         load_dataset(dev_fd, max_dev_samples)
-
 
 if __name__ == '__main__':
     main()

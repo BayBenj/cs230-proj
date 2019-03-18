@@ -16,13 +16,13 @@ from keras.layers import Input, Dense, Conv2D, Conv2DTranspose, LeakyReLU, \
 from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 from keras.optimizers import Adam, SGD
-from keras.callbacks import History, EarlyStopping
+from keras.callbacks import History, EarlyStopping, ModelCheckpoint
 import keras.backend as K
 
 CONV_FACTOR = np.log(10)
-history = History()
-early_stopping = EarlyStopping(monitor='val_loss', min_delta=0.2, patience=3)
 VGG_MEAN = [103.939, 116.779, 123.68]
+
+history = History()
 
 def ldr_encoder():
     vgg16_enc = {}
@@ -30,7 +30,7 @@ def ldr_encoder():
     vgg16 = VGG16(include_top=False, weights='imagenet',
         input_shape=(224, 224, 3))
 
-    # for layer in vgg16.layers[:17]:
+    # for layer in vgg16.layers[:16]:
     for layer in vgg16.layers:
         layer.trainable = False
 
@@ -43,27 +43,18 @@ def ldr_encoder():
     vgg16_enc['b5c3'] = vgg16.layers[17].output
     vgg16_enc['b5p'] = vgg16.layers[18].output
 
-    vgg16.summary()
-
     return vgg16_enc
 
-def latent_layers(x, drpo_rate=None, enable_bn=False):
-    # x = Conv2D(512, 1)(x)
-    # if enable_bn:
-    #     x = BatchNormalization()(x)
-    # x = activation_layer(x)
-    # if drpo_rate is not None:
-    #     x = Dropout(drpo_rate)(x)
-
-    x = Conv2D(512, 1)(x)
+def latent_layer(x, drpo_rate=None, enable_bn=False):
+    x = Conv2D(512, (1, 1), strides=(1, 1))(x)
     if enable_bn:
         x = BatchNormalization()(x)
     x = activation_layer(x)
     if drpo_rate is not None:
         x = Dropout(drpo_rate)(x)
     
-    # x = upscale_layer(x, 512,
-    #     drpo_rate=drpo_rate, enable_bn=enable_bn)
+    x = upscale_layer(x, 512,
+        drpo_rate=drpo_rate, enable_bn=enable_bn)
 
     return x
 
@@ -71,6 +62,7 @@ def upscale_layer(x, num_filters, filter_size=(3, 3), strides=(2, 2),
         padding='same', drpo_rate=None, enable_bn=False):
     x = Conv2DTranspose(num_filters, filter_size,
         strides=strides, padding=padding)(x)
+    # x = UpSampling2D(strides)(x)
     if enable_bn:
         x = BatchNormalization()(x)
     x = activation_layer(x)
@@ -80,9 +72,10 @@ def upscale_layer(x, num_filters, filter_size=(3, 3), strides=(2, 2),
     return x
 
 def concat_conv_layer(x, ldr_layer, num_filters, filter_size=(1, 1),
-        strides=(1, 1), activ='relu', output_layer=False,
+        strides=(1, 1), output_layer=False,
         drpo_rate=None, enable_bn=False):
-    x = Concatenate(axis=-1)([x, ldr_layer])
+    if ldr_layer is not None:
+        x = Concatenate(axis=-1)([x, ldr_layer])
     x = Conv2D(num_filters, filter_size, strides=strides)(x)
     if enable_bn:
         x = BatchNormalization()(x)
@@ -94,19 +87,15 @@ def concat_conv_layer(x, ldr_layer, num_filters, filter_size=(1, 1),
 
 def activation_layer(x, output_layer=False):
     if not output_layer:
-        return LeakyReLU(alpha=0.3)(x)
-        # return Activation('relu')(x)
+        return LeakyReLU(alpha=0.4)(x)
     else:
-        return LeakyReLU(alpha=0.3)(x)
-        # return Activation('sigmoid')(x)
+        return Activation('sigmoid')(x)
 
 def hdr_decoder(x, ldr_enc, drpo_rate=None, enable_bn=False):
+    x = concat_conv_layer(x, ldr_enc['b5c3'], 512,
+        drpo_rate=drpo_rate, enable_bn=enable_bn)
     x = upscale_layer(x, 512,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
-    # x = concat_conv_layer(x, ldr_enc['b5c3'], 512,
-    #     drpo_rate=drpo_rate, enable_bn=enable_bn)
-    # x = upscale_layer(x, 256,
-    #     drpo_rate=drpo_rate, enable_bn=enable_bn)
 
     x = concat_conv_layer(x, ldr_enc['b4c3'], 512,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
@@ -126,12 +115,8 @@ def hdr_decoder(x, ldr_enc, drpo_rate=None, enable_bn=False):
     x = concat_conv_layer(x, ldr_enc['b1c2'], 64,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
 
-    x = Conv2D(3, 1)(x)
-    if enable_bn:
-        x = BatchNormalization()(x)
-    x = activation_layer(x)
-    if drpo_rate is not None:
-        x = Dropout(drpo_rate)(x)
+    x = concat_conv_layer(x, None, 3,
+        drpo_rate=drpo_rate, enable_bn=enable_bn)
     
     x = concat_conv_layer(x, ldr_enc['inp'], 3, output_layer=True,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
@@ -148,7 +133,7 @@ def total_variation_loss(yPred):
     else:
         a = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, 1:, :img_ncols - 1, :])
         b = K.square(yPred[:, :img_nrows - 1, :img_ncols - 1, :] - yPred[:, :img_nrows - 1, 1:, :])
-    return K.mean(K.pow(a + b, 0.5))
+    return K.mean(K.pow(a + b, 1.25))
 
 def l2_loss(yTrue, yPred):
     return K.mean(K.square(yTrue - yPred))
@@ -157,8 +142,9 @@ def l1_loss(yTrue, yPred):
     return K.mean(K.abs(yTrue - yPred))
 
 def custom_loss(yTrue, yPred):
-    # return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
-    return K.mean(K.square(yTrue - yPred))
+    # return l1_loss(yTrue, yPred)
+    # return l2_loss(yTrue, yPred)
+    return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
 
 def psnr(yTrue, yPred):
     return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
@@ -168,8 +154,7 @@ def assemble(drpo_rate, enable_bn):
     ldr_enc = ldr_encoder()
 
     # Latent repr. layers
-    # x = latent_layers(ldr_enc['b5p'], drpo_rate, enable_bn)
-    x = latent_layers(ldr_enc['b5c3'], drpo_rate, enable_bn)
+    x = latent_layer(ldr_enc['b5p'], drpo_rate, enable_bn)
 
     # Decoder
     x = hdr_decoder(x, ldr_enc, drpo_rate, enable_bn)
@@ -182,17 +167,25 @@ def assemble(drpo_rate, enable_bn):
 
     return model
 
-def train(model, XY_train, XY_dev, epochs, batch_size):
+def train(model, XY_train, XY_dev, epochs, batch_size, es_fp):
     X_train, Y_train = XY_train
     X_dev, Y_dev = XY_dev
 
     model.summary()
 
+    model_cbs = []
+    model_cbs.append(history)
+    if es_fp is not None:
+        model_cbs.append(EarlyStopping(monitor='val_psnr', min_delta=0.1,
+            patience=2))
+        model_cbs.append(ModelCheckpoint(monitor='val_psnr', filepath=es_fp,
+            save_best_only=True))
+
     model.fit(X_train, Y_train, batch_size, epochs,
         validation_data=(X_dev, Y_dev),
         verbose=1,
         shuffle=True,
-        callbacks=[history, early_stopping])
+        callbacks=model_cbs)
 
 def load_weights(model, model_fp):
     model.load_weights(model_fp)
@@ -217,7 +210,6 @@ def predict_imgs(model, imgs, out_fd, fn_tag):
     Y_img.save(os.path.join(out_fd, '{}-y.jpg'.format(fn_tag)))
     Yhat_img.save(os.path.join(out_fd, '{}-yhat.jpg'.format(fn_tag)))
 
-
 def plot(out_fd):
     plt.plot(range(0,len(history.history["psnr"])), history.history["psnr"])
     plt.plot(range(0,len(history.history["val_psnr"])), history.history["val_psnr"])
@@ -235,6 +227,5 @@ def plot(out_fd):
     plt.savefig(os.path.join(out_fd, 'loss_chart.png'), dpi=100)
     plt.clf()
 
-
-def save(m, out_fd):
-    m.save(os.path.join(out_fd, 'model.h5'))
+def save_final(m, out_fd):
+    m.save(os.path.join(out_fd, 'model-final.h5'))
