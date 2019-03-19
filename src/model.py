@@ -17,6 +17,7 @@ from keras.applications import VGG16
 from keras.applications.vgg16 import preprocess_input
 from keras.optimizers import Adam, SGD
 from keras.callbacks import History, EarlyStopping, ModelCheckpoint
+from keras import regularizers
 import keras.backend as K
 
 CONV_FACTOR = np.log(10)
@@ -45,41 +46,55 @@ def ldr_encoder():
 
     return vgg16_enc
 
-def latent_layer(x, drpo_rate=None, enable_bn=False):
-    x = Conv2D(512, (1, 1), strides=(1, 1))(x)
+def latent_layer(x, drpo_rate=None, enable_bn=False,
+        kernel_regularizer=regularizers.l2(0.001),
+        bias_regularizer=regularizers.l2(0.001)):
+    x = Conv2D(512, (1, 1), strides=(1, 1),
+        kernel_regularizer=kernel_regularizer,
+        bias_regularizer=bias_regularizer)(x)
     if enable_bn:
         x = BatchNormalization()(x)
     x = activation_layer(x)
     if drpo_rate is not None:
         x = Dropout(drpo_rate)(x)
-    
+
     x = upscale_layer(x, 512,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
 
     return x
 
 def upscale_layer(x, num_filters, filter_size=(3, 3), strides=(2, 2),
-        padding='same', drpo_rate=None, enable_bn=False):
+        padding='same', drpo_rate=None, enable_bn=False,
+        kernel_regularizer=regularizers.l2(0.001),
+        bias_regularizer=regularizers.l2(0.001)):
     x = Conv2DTranspose(num_filters, filter_size,
-        strides=strides, padding=padding)(x)
+        strides=strides, padding=padding,
+        kernel_regularizer=kernel_regularizer,
+        bias_regularizer=bias_regularizer)(x)
     # x = UpSampling2D(strides)(x)
     if enable_bn:
         x = BatchNormalization()(x)
     x = activation_layer(x)
     if drpo_rate is not None:
         x = Dropout(drpo_rate)(x)
-    
+
     return x
 
 def concat_conv_layer(x, ldr_layer, num_filters, filter_size=(1, 1),
-        strides=(1, 1), output_layer=False,
+        strides=(1, 1), kernel_regularizer=regularizers.l2(0.001),
+        bias_regularizer=regularizers.l2(0.001), output_layer=False,
         drpo_rate=None, enable_bn=False):
+    if output_layer:
+        kernel_regularizer = None
+        bias_regularizer = None
     if ldr_layer is not None:
         x = Concatenate(axis=-1)([x, ldr_layer])
-    x = Conv2D(num_filters, filter_size, strides=strides)(x)
+    x = Conv2D(num_filters, filter_size, strides=strides,
+        kernel_regularizer=kernel_regularizer,
+        bias_regularizer=bias_regularizer)(x)
     if enable_bn:
         x = BatchNormalization()(x)
-    x = activation_layer(x, output_layer)    
+    x = activation_layer(x, output_layer)
     if drpo_rate is not None:
         x = Dropout(drpo_rate)(x)
 
@@ -106,18 +121,18 @@ def hdr_decoder(x, ldr_enc, drpo_rate=None, enable_bn=False):
         drpo_rate=drpo_rate, enable_bn=enable_bn)
     x = upscale_layer(x, 128,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
-    
+
     x = concat_conv_layer(x, ldr_enc['b2c2'], 128,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
     x = upscale_layer(x, 64,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
-    
+
     x = concat_conv_layer(x, ldr_enc['b1c2'], 64,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
 
     x = concat_conv_layer(x, None, 3,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
-    
+
     x = concat_conv_layer(x, ldr_enc['inp'], 3, output_layer=True,
         drpo_rate=drpo_rate, enable_bn=enable_bn)
 
@@ -176,8 +191,8 @@ def train(model, XY_train, XY_dev, epochs, batch_size, es_fp):
     model_cbs = []
     model_cbs.append(history)
     if es_fp is not None:
-        model_cbs.append(EarlyStopping(monitor='val_psnr', min_delta=0.1,
-            patience=2))
+        # model_cbs.append(EarlyStopping(monitor='val_psnr', min_delta=0.1,
+        #     patience=2))
         model_cbs.append(ModelCheckpoint(monitor='val_psnr', filepath=es_fp,
             save_best_only=True))
 

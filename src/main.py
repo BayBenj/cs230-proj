@@ -39,7 +39,7 @@ def train_model(args, start_time):
     plot_model(m, to_file='model.png')
 
     XY_train, XY_dev = load_trdev_datasets()
-    
+
     start = clock.time()
 
     out_fd = os.path.join(args.output_dir, 'model_{}_epch{}_bs{}_trn{}_val{}' \
@@ -76,7 +76,7 @@ def train_model(args, start_time):
 
 
 def predict_model(args, start_time):
-    m = model.assemble()
+    m = model.assemble(None, False)
     m.load_weights(args.model_h5)
 
     print('Processing: ' + args.input_dir)
@@ -99,6 +99,20 @@ def predict_model(args, start_time):
         img_out = image.array_to_img(img_pred[0])
         img_out.save(img_out_fp)
 
+def evaluate_model(args, start_time):
+    m = model.assemble(None, False)
+    m.load_weights(args.model_h5)
+
+    eval_fd = os.path.join(args.input_dir, args.eval_dataset)
+
+    print('Processing: ' + eval_fd)
+
+    X_eval, Y_eval = load_dataset(eval_fd, None)
+
+    res = m.evaluate(X_eval, Y_eval, verbose=1)
+    print('  model: ' + args.model_h5)
+    for i, metric_name in enumerate(m.metrics_names):
+        print('    {}: {}'.format(metric_name, res[i]))
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -140,13 +154,22 @@ def parse_args():
         default='model.h5')
     predict_parser.set_defaults(func=predict_model)
 
+    eval_parser = subparsers.add_parser('eval',
+        help='Evaluate neural network model against input dataset')
+    eval_parser.add_argument('--input-dir', dest='input_dir', type=str,
+        default='/proj/data/split_nn_dataset_aligned')
+    eval_parser.add_argument('--eval-dataset', dest='eval_dataset', type=str,
+        choices=['train', 'dev', 'test'], default='test')
+    eval_parser.add_argument('model_h5', type=str,
+        default='model.h5')
+    eval_parser.set_defaults(func=evaluate_model)
+
     args = parser.parse_args()
 
     if args.model_op == 'train':
         assert((args.val_split > 0.0) and (args.val_split <= 1.0))
 
     return args
-
 
 def load_dataset(dataset_fd, max_samples):
     x_fd = os.path.join(dataset_fd, 'x')
