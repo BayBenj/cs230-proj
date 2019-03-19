@@ -180,6 +180,8 @@ def psnr(yTrue, yPred):
     return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 
 def assemble(drpo_rate, enable_bn):
+    K.clear_session()
+
     # Encoder (VGG16)
     ldr_enc = ldr_encoder()
 
@@ -209,6 +211,7 @@ def train(model, XY_train, XY_dev, epochs, batch_size, es_fp):
         # model_cbs.append(EarlyStopping(monitor='val_psnr', min_delta=0.1,
         #     patience=2))
         model_cbs.append(ModelCheckpoint(monitor='val_psnr', filepath=es_fp,
+        # model_cbs.append(ModelCheckpoint(monitor='psnr', filepath=es_fp,
             save_best_only=True))
 
     model.fit(X_train, Y_train, batch_size, epochs,
