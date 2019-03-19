@@ -32,8 +32,9 @@ def ldr_encoder():
         input_shape=(224, 224, 3))
 
     # for layer in vgg16.layers[:16]:
-    for layer in vgg16.layers:
-        layer.trainable = False
+    vgg16_layers_trainable = [2, 5, 9, 13, 17]
+    for i, layer in enumerate(vgg16.layers):
+        layer.trainable = (i in vgg16_layers_trainable)
 
     vgg16_enc['img_inp'] = vgg16.input
     vgg16_enc['inp'] = vgg16.layers[0].input
@@ -47,8 +48,8 @@ def ldr_encoder():
     return vgg16_enc
 
 def latent_layer(x, drpo_rate=None, enable_bn=False,
-        kernel_regularizer=regularizers.l2(0.001),
-        bias_regularizer=regularizers.l2(0.001)):
+        kernel_regularizer=regularizers.l2(0.0001),
+        bias_regularizer=regularizers.l2(0.0001)):
     x = Conv2D(512, (1, 1), strides=(1, 1),
         kernel_regularizer=kernel_regularizer,
         bias_regularizer=bias_regularizer)(x)
@@ -65,8 +66,8 @@ def latent_layer(x, drpo_rate=None, enable_bn=False,
 
 def upscale_layer(x, num_filters, filter_size=(3, 3), strides=(2, 2),
         padding='same', drpo_rate=None, enable_bn=False,
-        kernel_regularizer=regularizers.l2(0.001),
-        bias_regularizer=regularizers.l2(0.001)):
+        kernel_regularizer=regularizers.l2(0.0001),
+        bias_regularizer=regularizers.l2(0.0001)):
     x = Conv2DTranspose(num_filters, filter_size,
         strides=strides, padding=padding,
         kernel_regularizer=kernel_regularizer,
@@ -81,8 +82,8 @@ def upscale_layer(x, num_filters, filter_size=(3, 3), strides=(2, 2),
     return x
 
 def concat_conv_layer(x, ldr_layer, num_filters, filter_size=(1, 1),
-        strides=(1, 1), kernel_regularizer=regularizers.l2(0.001),
-        bias_regularizer=regularizers.l2(0.001), output_layer=False,
+        strides=(1, 1), kernel_regularizer=regularizers.l2(0.0001),
+        bias_regularizer=regularizers.l2(0.0001), output_layer=False,
         drpo_rate=None, enable_bn=False):
     if output_layer:
         kernel_regularizer = None
@@ -173,7 +174,7 @@ def ssim(yTrue, yPred):#may be wrong
     C1 = (K1 * L) ** 2
     C2 = (K2 * L) ** 2
     ssim = (2 * mu_x * mu_y + C1) * (2 * sig_xy * C2) * 1.0 / ((mu_x ** 2 + mu_y ** 2 + C1) * (sig_x ** 2 + sig_y ** 2 + C2))
-    return ssim 
+    return ssim
 
 def psnr(yTrue, yPred):
     return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
