@@ -257,5 +257,13 @@ def plot(out_fd):
     plt.savefig(os.path.join(out_fd, 'loss_chart.png'), dpi=100)
     plt.clf()
 
+    plt.plot(range(0,len(history.history["ssim"])), history.history["ssim"])
+    plt.plot(range(0,len(history.history["val_ssim"])), history.history["val_ssim"])
+    plt.legend(["train","dev"], loc='center left')
+    plt.ylabel('SSIM')
+    plt.xlabel('Epoch')
+    plt.savefig(os.path.join(out_fd, 'ssim_chart.png'), dpi=100)
+    plt.clf()
+
 def save_final(m, out_fd):
     m.save(os.path.join(out_fd, 'model-final.h5'))
