@@ -161,6 +161,20 @@ def custom_loss(yTrue, yPred):
     # return l2_loss(yTrue, yPred)
     return total_variation_loss(yPred) + l1_loss(yTrue, yPred)
 
+def ssim(yTrue, yPred):#may be wrong
+    K1 = 0.04
+    K2 = 0.06
+    mu_x = K.mean(yPred)
+    mu_y = K.mean(yTrue)
+    sig_x = K.std(yPred)
+    sig_y = K.std(yTrue)
+    sig_xy = (sig_x * sig_y) ** 0.5
+    L =  255
+    C1 = (K1 * L) ** 2
+    C2 = (K2 * L) ** 2
+    ssim = (2 * mu_x * mu_y + C1) * (2 * sig_xy * C2) * 1.0 / ((mu_x ** 2 + mu_y ** 2 + C1) * (sig_x ** 2 + sig_y ** 2 + C2))
+    return ssim 
+
 def psnr(yTrue, yPred):
     return 10.0 * K.log(1.0 / K.mean(K.square(yTrue - yPred))) / CONV_FACTOR
 
@@ -178,7 +192,7 @@ def assemble(drpo_rate, enable_bn):
 
     optimi = Adam()
 
-    model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr])
+    model.compile(optimizer=optimi, loss=custom_loss, metrics=[psnr, ssim])
 
     return model
 
